@@ -89,7 +89,6 @@ export function SidebarInset({ className, ...props }: React.HTMLAttributes<HTMLD
     <div
       className={cn(
         'flex-1',
-        isCollapsed ? 'lg:pl-[60px]' : 'lg:pl-[240px]',
         'transition-all duration-300 ease-in-out',
         className
       )}

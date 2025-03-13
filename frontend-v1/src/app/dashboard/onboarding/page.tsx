@@ -3,7 +3,7 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { Button } from '@/components/ui/button'
 import { WhatsAppQR } from '@/components/whatsapp/qr-code'
 import { Card, CardContent } from '@/components/ui/card'
-import { CheckCircle2, ArrowRight } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Smartphone } from 'lucide-react'
 import PocketBase from 'pocketbase'
 
 const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL
@@ -18,12 +18,10 @@ export default async function OnboardingPage() {
     redirect('/sign-in')
   }
 
-  // Get session name from user data
   const sessionName = user.username || 
                      user.emailAddresses[0]?.emailAddress?.split('@')[0] || 
                      `user_${userId}`
 
-  // Check WAHA session status and update PocketBase if working
   let isWorking = false
   try {
     const sessionResponse = await fetch(`${WAHA_API_URL}/api/sessions/${sessionName}`)
@@ -32,14 +30,12 @@ export default async function OnboardingPage() {
     isWorking = sessionData.engine?.state === 'CONNECTED' || sessionData.status === 'WORKING'
 
     if (isWorking) {
-      // Find client record
       const records = await pb.collection('clients').getList(1, 1, {
         filter: `clerk_id = "${userId}"`
       })
 
       if (records.items.length > 0) {
         const client = records.items[0]
-        // Update client with session name
         await pb.collection('clients').update(client.id, {
           session_id: sessionName
         })
@@ -50,42 +46,58 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <div className="container mx-auto py-10">
-      <Card className="max-w-2xl mx-auto">
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-xl border-0 bg-black/20">
         <CardContent className="p-8">
-          <div className="flex flex-col items-center justify-center space-y-8">
-            <div className="text-center space-y-2">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
-                WhatsApp Setup
-              </h1>
-              <p className="text-muted-foreground">
-                Conecta tu WhatsApp para comenzar a usar el dashboard
+          <div className="flex flex-col items-center space-y-8">
+            <div className="flex flex-col items-center space-y-2 text-center">
+              <div className="rounded-full bg-white/10 p-3">
+                <Smartphone className="h-8 w-8 text-white" />
+              </div>
+              <h1 className="text-3xl font-bold text-white">Conecta tu WhatsApp</h1>
+              <p className="text-gray-300 max-w-md">
+                Escanea el código QR con tu WhatsApp para comenzar a usar todas las funcionalidades
               </p>
             </div>
 
             {isWorking ? (
-              <div className="flex flex-col items-center justify-center space-y-6 w-full max-w-md mx-auto p-6 rounded-lg bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-950/30 dark:to-blue-950/30">
-                <div className="flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30">
-                  <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
+              <div className="w-full space-y-6">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="rounded-full bg-green-500/20 p-3">
+                    <CheckCircle2 className="h-8 w-8 text-green-400" />
+                  </div>
+                  <div className="text-center">
+                    <h2 className="text-xl font-semibold text-green-400">
+                      ¡WhatsApp Conectado!
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-300">
+                      Todo está listo para comenzar
+                    </p>
+                  </div>
                 </div>
-                <div className="text-center space-y-2">
-                  <h2 className="text-xl font-semibold text-green-600 dark:text-green-400">
-                    ¡WhatsApp Conectado!
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Tu WhatsApp está listo para usar. Puedes acceder al dashboard para comenzar.
-                  </p>
-                </div>
-                <Button className="w-full max-w-xs group" asChild>
+                <Button 
+                  className="w-full bg-white text-black hover:bg-white/90" 
+                  size="lg" 
+                  asChild
+                >
                   <a href="/dashboard" className="flex items-center justify-center gap-2">
                     Ir al Dashboard
-                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight className="h-4 w-4" />
                   </a>
                 </Button>
               </div>
             ) : (
-              <div className="w-full max-w-md">
-                <WhatsAppQR />
+              <div className="w-full space-y-6">
+                <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                  <WhatsAppQR />
+                </div>
+                <div className="text-sm text-gray-300">
+                  <ol className="list-decimal space-y-2 pl-4">
+                    <li>Abre WhatsApp en tu teléfono</li>
+                    <li>Toca Menú o Configuración y selecciona WhatsApp Web</li>
+                    <li>Apunta tu teléfono hacia esta pantalla para escanear el código QR</li>
+                  </ol>
+                </div>
               </div>
             )}
           </div>

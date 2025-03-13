@@ -251,8 +251,8 @@ export const SidebarInset = React.forwardRef<
       ref={ref}
       className={cn(
         'flex-1',
-        isCollapsed ? 'lg:pl-[60px]' : 'lg:pl-[240px]',
         'transition-all duration-300 ease-in-out',
+        isCollapsed && 'ml-2',
         className
       )}
       {...props}

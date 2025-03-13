@@ -1,40 +1,78 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
-import { getOrCreateClient } from '@/lib/utils/pocketbase'
+import PocketBase from 'pocketbase'
+
+const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL || '')
 
 export async function GET() {
   try {
     const session = await auth()
-    const userId = session?.userId
-    
-    if (!userId) {
-      return new NextResponse('Unauthorized', { status: 401 })
-    }
-
     const user = await currentUser()
-    if (!user) {
-      return new NextResponse('User not found', { status: 404 })
+    
+    if (!session?.userId || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Asegurarnos de tener los campos requeridos
-    const firstName = user.firstName || 'User'
-    const lastName = user.lastName || userId.substring(0, 8)
-    const username = user.username || user.emailAddresses[0]?.emailAddress?.split('@')[0] || `user_${userId}`
-
-    // Obtener o crear el cliente con la información de Clerk
+    // Intentar autenticar con PocketBase primero
     try {
-      const client = await getOrCreateClient(userId, {
-        first_name: firstName,
-        last_name: lastName,
-        username: username
+      const token = await session.getToken()
+      if (!token) {
+        throw new Error('No token available')
+      }
+      
+      pb.authStore.save(token, null)
+      
+      // Verificar si el cliente existe
+      const existingClient = await pb.collection('clients').getFirstListItem(`clerk_id = "${session.userId}"`)
+      
+      return NextResponse.json({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.emailAddresses[0]?.emailAddress,
+        userId: session.userId,
+        clientId: existingClient.id,
+        token
       })
-      return NextResponse.json(client)
-    } catch (error) {
-      console.error('Error creating client:', error)
-      return new NextResponse('Failed to create client record', { status: 400 })
+      
+    } catch (pbError: any) { // Using any here because PocketBase error type is not well defined
+      // Si el cliente no existe, lo creamos
+      if (pbError.status === 404) {
+        const newClient = await pb.collection('clients').create({
+          first_name: user.firstName || 'User',
+          last_name: user.lastName || session.userId,
+          clerk_id: session.userId,
+          username: user.username || user.emailAddresses[0]?.emailAddress || `user_${session.userId}`,
+          phone_client: null,
+          session_id: '',
+          created: new Date().toISOString(),
+          updated: new Date().toISOString()
+        })
+        
+        const token = await session.getToken()
+        if (!token) {
+          throw new Error('No token available after client creation')
+        }
+        
+        return NextResponse.json({
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username,
+          email: user.emailAddresses[0]?.emailAddress,
+          userId: session.userId,
+          clientId: newClient.id,
+          token
+        })
+      }
+      
+      throw pbError
     }
+
   } catch (error) {
-    console.error('Error getting user:', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    console.error('Error in user endpoint:', error)
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 } 

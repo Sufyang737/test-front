@@ -25,7 +25,33 @@ export function WhatsAppQR() {
   const [sessionName, setSessionName] = useState<string | null>(null)
   const { toast } = useToast()
   const router = useRouter()
-  const { userId, isLoaded, isSignedIn } = useAuth()
+  const { userId, isLoaded, isSignedIn, getToken } = useAuth()
+
+  // Autenticar PocketBase con el token de Clerk
+  const authPocketBase = async () => {
+    try {
+      const token = await getToken();
+      if (!token) {
+        console.error('❌ No se pudo obtener el token de Clerk');
+        throw new Error('No auth token available');
+      }
+      
+      console.log('🔑 Token obtenido, autenticando con PocketBase...');
+      pb.authStore.save(token, null);
+      
+      // Verificar que la autenticación fue exitosa
+      if (!pb.authStore.isValid) {
+        console.error('❌ Token no válido para PocketBase');
+        throw new Error('Invalid PocketBase authentication');
+      }
+      
+      console.log('✅ Autenticación con PocketBase exitosa');
+      return true;
+    } catch (error) {
+      console.error('❌ Error en autenticación:', error);
+      throw error;
+    }
+  };
 
   // Buscar el cliente en PocketBase
   const findClient = async () => {
@@ -44,24 +70,42 @@ export function WhatsAppQR() {
         return false
       }
 
+      await authPocketBase();
+
       const records = await pb.collection('clients').getList(1, 1, {
         filter: `clerk_id = "${userId}"`
       })
       
-      console.log('📄 Registros encontrados:', records.items)
+      console.log('📄 Resultado completo de la búsqueda:', {
+        totalItems: records.totalItems,
+        page: records.page,
+        perPage: records.perPage,
+        items: records.items,
+        filter: `clerk_id = "${userId}"`
+      })
       
       if (records.items.length > 0) {
         const client = records.items[0]
         console.log('👤 Cliente encontrado:', client)
         setClientId(client.id)
         
-        // Si ya tiene una sesión activa, redirigir al dashboard
-        if (client.session_id && client.phone_client) {
-          console.log('✅ Cliente ya tiene sesión activa')
-          setStatus('WORKING')
-          setPhone(client.phone_client.toString())
-          router.push('/dashboard')
-          return true
+        // Si ya tiene una sesión activa, verificar en WAHA
+        if (client.session_id) {
+          try {
+            const wahaResponse = await fetch(`${WAHA_API_URL}/api/sessions/${client.session_id}`);
+            if (wahaResponse.ok) {
+              const wahaData = await wahaResponse.json();
+              if (wahaData.status === 'WORKING' || wahaData.engine?.state === 'CONNECTED') {
+                console.log('✅ Cliente ya tiene sesión activa y funcionando')
+                setStatus('WORKING')
+                setPhone(client.phone_client?.toString() || null)
+                router.push('/dashboard')
+                return true
+              }
+            }
+          } catch (error) {
+            console.log('Error verificando sesión en WAHA:', error)
+          }
         }
       }
       return false
@@ -207,57 +251,91 @@ export function WhatsAppQR() {
         throw new Error('No hay userId para actualizar')
       }
 
-      // Si no tenemos clientId, buscamos el cliente primero
-      if (!clientId) {
-        console.log('🔍 Buscando cliente para actualizar...')
-        const records = await pb.collection('clients').getList(1, 1, {
-          filter: `clerk_id = "${userId}"`
-        })
-        
-        if (records.items.length > 0) {
-          const client = records.items[0]
-          console.log('👤 Cliente encontrado para actualizar:', client)
-          setClientId(client.id)
-          
-          const data = {
-            session_id: sessionId,
-            clerk_id: userId
-          }
-          
-          console.log('📤 Actualizando cliente con:', data)
-          const updated = await pb.collection('clients').update(client.id, data)
-          console.log('✅ Cliente actualizado:', updated)
-          return updated
-        } else {
-          throw new Error('No se encontró el cliente para actualizar')
-        }
-      }
+      await authPocketBase();
 
-      // Si ya tenemos clientId, actualizamos directamente
-      const data = {
-        session_id: sessionId,
-        clerk_id: userId
-      }
+      // Primero buscamos el cliente existente
+      console.log('🔍 Buscando cliente existente...')
+      console.log('🔑 userId:', userId)
       
-      console.log('📤 Actualizando cliente existente con:', data)
-      if (clientId) {
-        const updated = await pb.collection('clients').update(clientId, data)
+      const records = await pb.collection('clients').getList(1, 1, {
+        filter: `clerk_id = "${userId}"`
+      })
+      
+      console.log('📄 Resultado completo de la búsqueda:', {
+        totalItems: records.totalItems,
+        page: records.page,
+        perPage: records.perPage,
+        items: records.items,
+        filter: `clerk_id = "${userId}"`
+      })
+      
+      if (records.items.length > 0) {
+        const client = records.items[0]
+        console.log('✅ Cliente encontrado, actualizando:', client)
+        setClientId(client.id)
+        
+        const updated = await pb.collection('clients').update(client.id, {
+          session_id: sessionId,
+          phone_client: 0,
+          updated: new Date().toISOString()
+        })
         console.log('✅ Cliente actualizado:', updated)
         return updated
+      } else {
+        console.error('❌ No se encontró el cliente para actualizar')
+        throw new Error('No se encontró el cliente para actualizar')
       }
-
-      throw new Error('No se pudo actualizar el cliente')
     } catch (error) {
       console.error('❌ Error actualizando PocketBase:', error)
       throw error
     }
   }
 
-  useEffect(() => {
-    if (isLoaded) {
-      findClient()
+  const fetchClient = async () => {
+    try {
+      // Asegurarnos de estar autenticados antes de cualquier operación
+      await authPocketBase();
+      
+      console.log('🔍 Buscando cliente directo por clerk_id:', userId);
+      
+      const records = await pb.collection('clients').getList(1, 1, {
+        filter: `clerk_id = "${userId}"`
+      });
+      
+      console.log('📄 Resultado de búsqueda:', {
+        totalItems: records.totalItems,
+        authStoreToken: pb.authStore.token ? 'Present' : 'Missing',
+        authStoreIsValid: pb.authStore.isValid
+      });
+      
+      if (records.items.length > 0) {
+        const clientRecord = records.items[0];
+        console.log('✅ Cliente encontrado:', clientRecord);
+        setClientId(clientRecord.id);
+        return clientRecord;
+      } else {
+        console.log('❌ Cliente no encontrado');
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error en fetchClient:', error);
+      // Verificar si es un error de autenticación
+      if (error.status === 401 || error.status === 403) {
+        console.log('🔄 Error de autenticación, reintentando...');
+        await authPocketBase(); // Reintentar autenticación
+      }
+      throw error;
     }
-  }, [isLoaded])
+  };
+
+  useEffect(() => {
+    if (isLoaded && userId) {
+      findClient()
+      
+      // Fetch directo del cliente
+      fetchClient();
+    }
+  }, [isLoaded, userId])
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout

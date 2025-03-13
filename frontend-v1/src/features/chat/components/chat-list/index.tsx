@@ -6,87 +6,109 @@ import { MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-
-interface Chat {
-  id: string
-  contact: {
-    id: string
-    name: string
-    phone: string
-    avatar?: string
-  }
-  lastMessage: {
-    content: string
-    timestamp: string
-    status: 'sent' | 'delivered' | 'read'
-  }
-  unreadCount: number
-}
+import { Chat } from '@/features/chat/store/chat-store'
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Check, CheckCheck, Search } from 'lucide-react'
 
 interface ChatListProps {
-  chats?: Chat[]
-  activeChat?: string | null
+  chats: Chat[]
+  activeChat?: string
   onChatSelect: (chatId: string) => void
+  loading?: boolean
+  onSearch?: (query: string) => void
 }
 
-export function ChatList({ chats = [], activeChat, onChatSelect }: ChatListProps) {
-  if (chats.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-4">
-        <MessageSquare className="h-12 w-12 text-muted-foreground" />
-        <div>
-          <h3 className="font-semibold">No hay chats</h3>
-          <p className="text-sm text-muted-foreground">
-            Los chats aparecerán aquí cuando tengas nuevos mensajes
-          </p>
+export function ChatList({ chats, activeChat, onChatSelect, loading, onSearch }: ChatListProps) {
+  return (
+    <div className="flex flex-col h-full">
+      {/* Search bar */}
+      <div className="p-4 border-b">
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar chat..."
+            className="pl-9"
+            onChange={(e) => onSearch?.(e.target.value)}
+          />
         </div>
       </div>
-    )
-  }
 
-  return (
-    <div className="space-y-2 p-2">
-      {chats.map((chat) => (
-        <button
-          key={chat.id}
-          onClick={() => onChatSelect(chat.id)}
-          className={cn(
-            "w-full flex items-center gap-3 p-3 rounded-lg transition-colors",
-            "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1",
-            "focus-visible:ring-ring text-left",
-            activeChat === chat.id && "bg-muted"
-          )}
-        >
-          <Avatar className="h-12 w-12 flex-shrink-0">
-            <AvatarImage src={chat.contact.avatar} />
-            <AvatarFallback>
-              {chat.contact.name.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium truncate">
-                {chat.contact.name}
-              </span>
-              <span className="text-xs text-muted-foreground flex-shrink-0">
-                {format(new Date(chat.lastMessage.timestamp), 'HH:mm')}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm text-muted-foreground truncate">
-                {chat.lastMessage.content}
-              </span>
-              {chat.unreadCount > 0 && (
-                <Badge variant="default" className="flex-shrink-0">
-                  {chat.unreadCount}
-                </Badge>
-              )}
-            </div>
+      {/* Chat list */}
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          // Loading skeletons
+          <div className="space-y-4 p-4">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-[140px]" />
+                  <Skeleton className="h-3 w-[200px]" />
+                </div>
+                <Skeleton className="h-3 w-8" />
+              </div>
+            ))}
           </div>
-        </button>
-      ))}
+        ) : chats.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full p-4 text-center text-muted-foreground">
+            <p>No hay chats disponibles</p>
+          </div>
+        ) : (
+          <div className="space-y-0.5 p-2">
+            {chats.map((chat) => (
+              <button
+                key={chat.id}
+                onClick={() => onChatSelect(chat.id)}
+                className={cn(
+                  "w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors",
+                  activeChat === chat.id && "bg-muted"
+                )}
+              >
+                {/* Avatar */}
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                    {chat.contact.avatar ? (
+                      <img 
+                        src={chat.contact.avatar} 
+                        alt={chat.contact.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-lg text-muted-foreground">
+                        {chat.contact.name[0].toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  {chat.unreadCount > 0 && (
+                    <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-[11px] font-medium text-primary-foreground flex items-center justify-center">
+                      {chat.unreadCount}
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat info */}
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium truncate">{chat.contact.name}</p>
+                    <span className="text-[11px] text-muted-foreground">
+                      {format(new Date(chat.lastMessage.timestamp), 'HH:mm')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    {chat.lastMessage.status === 'read' ? (
+                      <CheckCheck className="h-4 w-4 text-primary" />
+                    ) : chat.lastMessage.status === 'delivered' ? (
+                      <Check className="h-4 w-4" />
+                    ) : null}
+                    <span className="truncate">{chat.lastMessage.content}</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 } 

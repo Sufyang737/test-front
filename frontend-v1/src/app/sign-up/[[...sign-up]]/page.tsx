@@ -1,4 +1,4 @@
-import { SignUp } from "@clerk/nextjs";
+import { CustomSignUp } from "@/components/auth/custom-sign-up";
 
 export const metadata = {
   title: 'Authentication | Sign Up',
@@ -44,7 +44,7 @@ export default function SignUpPage() {
               Enter your details below to create your account
             </p>
           </div>
-          <SignUp />
+          <CustomSignUp />
         </div>
       </div>
     </div>

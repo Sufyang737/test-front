@@ -6,11 +6,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 import NavMain from '@/components/navigation/nav-main';
-import { TeamSwitcher } from '../team-switcher';
 import { useClerk, useUser } from '@clerk/nextjs';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Menu } from 'lucide-react';
 import { Sidebar, useSidebar } from '@/components/ui/sidebar';
+import { useClientProfile } from "@/hooks/use-client-profile"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export const company = {
   name: 'Acme Inc',
@@ -25,6 +26,7 @@ export function AppSidebar({ className }: AppSidebarProps) {
   const { signOut } = useClerk();
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
+  const { profile, loading } = useClientProfile()
 
   if (!user) return null;
 
@@ -42,7 +44,28 @@ export function AppSidebar({ className }: AppSidebarProps) {
         </SheetTrigger>
         <SheetContent side="left" className="w-[240px] p-0">
           <div className="px-3 py-2">
-            <TeamSwitcher />
+            <div className="flex items-center gap-2">
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-background border text-foreground text-sm font-medium">
+                    {profile?.name_company ? profile.name_company[0].toUpperCase() : 'C'}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">
+                      {profile?.name_company || 'Company Name'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Enterprise
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <ScrollArea className="my-2 h-[calc(100vh-8rem)] pb-8">
             <div className="px-3">
@@ -69,16 +92,37 @@ export function AppSidebar({ className }: AppSidebarProps) {
           "hidden lg:block",
           className,
           "transition-[width] duration-300 ease-in-out",
-          isCollapsed ? "w-[60px]" : "w-[240px]"
+          isCollapsed ? "w-[45px]" : "w-[240px]"
         )}
         collapsible="icon"
       >
         <div className={cn(
           "flex h-[50px] items-center border-b",
           "transition-all duration-300 ease-in-out",
-          isCollapsed ? "justify-center px-2" : "justify-between px-4"
+          isCollapsed ? "justify-center px-1" : "px-4"
         )}>
-          <TeamSwitcher />
+          {loading ? (
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              {!isCollapsed && <Skeleton className="h-4 w-24" />}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-background border text-foreground text-sm font-medium">
+                {profile?.name_company ? profile.name_company[0].toUpperCase() : 'C'}
+              </div>
+              {!isCollapsed && (
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">
+                    {profile?.name_company || 'Company Name'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Enterprise
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <ScrollArea className={cn(
           "flex-1",

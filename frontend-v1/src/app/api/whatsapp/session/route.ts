@@ -1,15 +1,27 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 
 const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
+function generateSessionName(userId: string) {
+  // Tomar los primeros 8 caracteres del userId y añadir un timestamp
+  const shortId = userId.slice(-8);
+  const timestamp = Date.now().toString(36);
+  return `session_${shortId}_${timestamp}`;
+}
+
 export async function POST() {
   try {
     const session = await auth()
+    const user = await currentUser()
+    
     if (!session?.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Generar un nombre de sesión único
+    const sessionName = generateSessionName(session.userId);
 
     // Asegurarnos de que la URL del webhook sea completa
     const webhookUrl = `${APP_URL}/api/webhooks/whatsapp`
@@ -20,7 +32,7 @@ export async function POST() {
     }
 
     const createBody = {
-      name: "sufyang737",
+      name: sessionName,
       start: true,
       config: {
         proxy: null,
@@ -72,6 +84,29 @@ export async function POST() {
     if (!response.ok) {
       const error = await response.text()
       console.error('Error creating session:', error)
+      
+      // Si la sesión ya existe, intentar con un nuevo nombre
+      if (response.status === 422) {
+        const newSessionName = generateSessionName(session.userId);
+        createBody.name = newSessionName;
+        
+        const retryResponse = await fetch(`${WAHA_API_URL}/api/sessions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(createBody)
+        });
+
+        if (!retryResponse.ok) {
+          return NextResponse.json({ error: await retryResponse.text() }, { status: retryResponse.status });
+        }
+
+        const retryData = await retryResponse.json();
+        console.log('Session created on retry:', retryData);
+        return NextResponse.json(retryData);
+      }
+
       return NextResponse.json({ error }, { status: response.status })
     }
 

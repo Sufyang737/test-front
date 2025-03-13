@@ -104,30 +104,34 @@ export default function ChatsPage() {
       <div className="flex-1 min-h-0 rounded-lg border bg-background shadow-sm">
         <div className="grid h-full lg:grid-cols-[280px_1fr]">
           {/* Chat List */}
-          <div className="border-r">
+          <div className="border-r h-full overflow-hidden">
             <ChatList
               chats={chats}
               activeChat={activeChat}
               onChatSelect={selectChat}
+              loading={loading}
+              onSearch={setSearchQuery}
             />
           </div>
 
           {/* Chat Messages */}
-          <div className="flex flex-col">
+          <div className="flex flex-col h-full overflow-hidden">
             {activeChat ? (
               <>
-                <ScrollArea className="flex-1">
-                  {loadingMessages ? (
-                    <div className="flex items-center justify-center h-full">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
+                {loadingMessages ? (
+                  <div className="flex items-center justify-center flex-1">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="flex-1 min-h-0">
                     <ChatMessages
                       messages={messages}
                       userId="me"
+                      onLoadMore={loadMore}
+                      loading={loading}
                     />
-                  )}
-                </ScrollArea>
+                  </div>
+                )}
 
                 {/* Chat Input */}
                 <div className="p-4 border-t bg-muted/10">

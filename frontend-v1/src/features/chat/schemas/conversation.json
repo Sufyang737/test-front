@@ -1,0 +1,47 @@
+{
+  "name": "conversation",
+  "type": "base",
+  "schema": [
+    {
+      "name": "client_id",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "number_client",
+      "type": "number",
+      "required": true
+    },
+    {
+      "name": "category",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "finished_chat",
+      "type": "bool",
+      "required": true
+    },
+    {
+      "name": "chat_id",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "use_bot",
+      "type": "bool",
+      "required": true,
+      "default": false
+    }
+  ],
+  "listRule": "@request.auth.id != \"\" && (client_id = @request.auth.id || @request.auth.role = \"support\")",
+  "viewRule": "@request.auth.id != \"\" && (client_id = @request.auth.id || @request.auth.role = \"support\")",
+  "createRule": "@request.auth.id != \"\"",
+  "updateRule": "@request.auth.id != \"\" && (client_id = @request.auth.id || @request.auth.role = \"support\")",
+  "deleteRule": "@request.auth.id != \"\" && @request.auth.role = \"support\""
+} 

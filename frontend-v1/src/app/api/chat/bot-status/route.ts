@@ -18,22 +18,38 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get('chatId')
+    const clientId = searchParams.get('clientId')
 
-    if (!chatId) {
+    if (!chatId || !clientId) {
       return NextResponse.json(
-        { exists: false },
-        { status: 200 }
+        { error: 'Chat ID and Client ID are required' },
+        { status: 400 }
       )
     }
 
     // Get conversation record
     const conversations = await pb.collection('conversation').getList(1, 1, {
-      filter: `chat_id = "${chatId}"`,
-      requestKey: null // Evitar auto-cancelación
+      filter: `chat_id = "${chatId}" && client_id = "${clientId}"`,
+      requestKey: null // Avoid auto-cancellation
     })
 
+    if (conversations.items.length === 0) {
+      return NextResponse.json({
+        success: true,
+        record: {
+          useBot: false,
+          category: 'general'
+        }
+      })
+    }
+
+    const conversation = conversations.items[0]
     return NextResponse.json({
-      exists: conversations.items.length > 0
+      success: true,
+      record: {
+        useBot: conversation.use_bot,
+        category: conversation.category
+      }
     })
   } catch (error: any) {
     console.error('Error checking chat existence:', error)

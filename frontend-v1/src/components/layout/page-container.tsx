@@ -7,7 +7,7 @@ interface PageContainerProps {
 
 export default function PageContainer({ children }: PageContainerProps) {
   return (
-    <div className="flex flex-col flex-1 p-4 pt-[74px] lg:pt-[80px]">
+    <div className="flex flex-col flex-1 p-4">
       {children}
     </div>
   )

@@ -1,6 +1,6 @@
 import PocketBase from 'pocketbase'
 
-export const pb = new PocketBase('https://ai-agent-database.srv.clostech.tech')
+export const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL)
 
 export async function getOrCreateClient(userId: string, userData: { 
   first_name?: string, 
