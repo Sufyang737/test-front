@@ -15,6 +15,13 @@ export function useBotStatus() {
       setError(null)
 
       const response = await fetch(`/api/chat/bot-status?chatId=${chatId}&clientId=${clientId}`)
+      
+      // Check content type to handle non-JSON responses
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid response format: Expected JSON')
+      }
+
       if (!response.ok) {
         const data = await response.json()
         throw new Error(data.error || 'Failed to get bot status')

@@ -5,19 +5,20 @@ import PocketBase from 'pocketbase'
 
 const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL)
 
-export async function getClientId(sessionId: string) {
-  try {
-    // Find client record by session_id
-    const record = await pb.collection('clients').getFirstListItem(`session_id="${sessionId}"`)
-    
-    if (!record?.id) {
-      throw new Error('No client record found')
-    }
+// Autenticar con el token de administrador
+if (process.env.NEXT_PUBLIC_POCKETBASE_ADMIN_TOKEN) {
+  pb.authStore.save(process.env.NEXT_PUBLIC_POCKETBASE_ADMIN_TOKEN)
+}
 
-    return record.id
+export async function getClientId(clerkUserId: string): Promise<string | null> {
+  try {
+    const record = await pb.collection('clients').getFirstListItem(
+      `clerk_id = "${clerkUserId}"`
+    )
+    return record?.id || null
   } catch (error) {
     console.error('Error getting client ID:', error)
-    throw error
+    return null
   }
 }
 

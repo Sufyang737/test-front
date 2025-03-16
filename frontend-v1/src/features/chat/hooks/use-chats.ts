@@ -56,8 +56,30 @@ interface MessageWithTimestamp {
   timestamp: string
 }
 
+interface ChatStore {
+  chats: Chat[];
+  activeChat: Chat | null;
+  loading: boolean;
+  error: string | null;
+  setChats: (chats: Chat[] | ((prev: Chat[]) => Chat[])) => void;
+  setActiveChat: (chat: Chat | null) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  updateChat: (chatId: string, updates: Partial<Chat>) => void;
+}
+
 export function useChats() {
-  const { chats, activeChat, loading, error, setChats, setActiveChat, setLoading, setError } = useChatStore()
+  const { 
+    chats, 
+    activeChat, 
+    loading, 
+    error, 
+    setChats, 
+    setActiveChat, 
+    setLoading, 
+    setError,
+    updateChat 
+  } = useChatStore();
   const { userId } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [sendingMessage, setSendingMessage] = useState(false)
@@ -77,25 +99,24 @@ export function useChats() {
 
   const getSessionId = async () => {
     try {
-      // Crear una señal de cancelación
-      const cancelSignal = new AbortController();
-
+      console.log('🔄 Consultando información del cliente...')
       const records = await pb.collection('clients').getList(1, 1, {
         filter: `clerk_id = "${userId}"`,
-        $cancelKey: `get-session-${userId}`, // Clave única para esta solicitud
-        $autoCancel: false // Deshabilitar la cancelación automática
+        $cancelKey: `get-session-${userId}`,
+        $autoCancel: false
       });
 
       if (records.items.length > 0) {
         const client = records.items[0];
+        console.log('✅ Cliente encontrado:', client.id)
         setClientId(client.id);
-        setSessionId(client.session_id); // Guardar el sessionId en el estado
+        setSessionId(client.session_id);
         return client.session_id;
       }
 
+      console.error('❌ No se encontró el cliente')
       throw new Error('No session found');
     } catch (error) {
-      // Verificar si el error es por cancelación
       if (error instanceof ClientResponseError && error.isAbort) {
         console.log('Request cancelled:', error);
         return null;
@@ -108,68 +129,38 @@ export function useChats() {
   const initSession = async (sessionId: string) => {
     try {
       if (!WAHA_API_URL) {
-        console.error('❌ WAHA_API_URL no está configurada')
         throw new Error('WAHA API URL no configurada. Verifica tu archivo .env.local')
       }
 
-      console.log('🔄 Intentando inicializar sesión...')
-      console.log('URL:', WAHA_API_URL)
-      console.log('Session ID:', sessionId)
-
+      console.log('🔄 Inicializando sesión...')
+      
       // Verificar el estado de la sesión
-      const response = await fetch(`${WAHA_API_URL}/api/sessions`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        }
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ Error al verificar sesiones:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText
-        })
-        throw new Error(`Error al verificar sesiones: ${response.status} ${response.statusText}`)
-      }
-
+      const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/sessions`)
       const sessions = await response.json()
-      console.log('✅ Sesiones disponibles:', sessions)
+      
       const existingSession = sessions.find((s: any) => s.name === sessionId)
-
-      if (existingSession) {
-        console.log('✅ Sesión existente encontrada:', existingSession.status)
-        if (existingSession.status === 'WORKING') {
-          return existingSession
-        }
+      
+      if (existingSession?.status === 'WORKING') {
+        console.log('✅ Sesión activa encontrada')
+        return existingSession
       }
 
-      // Si no existe la sesión o no está en estado WORKING, intentar iniciarla
-      const startResponse = await fetch(`${WAHA_API_URL}/api/sessions/${sessionId}/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        }
+      // Si no existe o no está activa, intentar iniciarla
+      console.log('🔄 Iniciando nueva sesión...')
+      const startResponse = await fetchWithoutCredentials(`${WAHA_API_URL}/api/sessions/${sessionId}/start`, {
+        method: 'POST'
       })
 
       if (!startResponse.ok) {
-        const errorData = await startResponse.text()
-        console.error('❌ Error al iniciar sesión:', {
-          status: startResponse.status,
-          statusText: startResponse.statusText,
-          error: errorData
-        })
-        throw new Error(`Error al iniciar sesión: ${startResponse.status} ${startResponse.statusText}`)
+        throw new Error(`Error al iniciar sesión: ${startResponse.status}`)
       }
 
       const data = await startResponse.json()
-      console.log('✅ Sesión iniciada correctamente:', data)
+      console.log('✅ Sesión iniciada correctamente')
       return data
     } catch (error) {
-      console.error('❌ Error detallado al inicializar sesión:', error)
+      console.error('❌ Error al inicializar sesión:', error)
+      setError('Error al inicializar la sesión de WhatsApp')
       throw error
     }
   }
@@ -303,116 +294,102 @@ export function useChats() {
 
   const fetchChats = async (resetPage = false) => {
     try {
-      setLoading(true)
-      setError(null)
+      setError(null);
 
-      const currentSessionId = sessionId || await getSessionId()
-      const currentPage = resetPage ? 1 : page
+      const currentSessionId = sessionId || await getSessionId();
+      if (!currentSessionId) {
+        throw new Error('No se pudo obtener el ID de sesión');
+      }
 
-      const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/${currentSessionId}/chats/overview`)
-      const data = await response.json()
+      const currentPage = resetPage ? 1 : page;
+      const limit = 20;
+      const offset = (currentPage - 1) * limit;
       
-      // Filter chats based on search query
-      let filteredData = data
+      console.log('🔄 Obteniendo chats...');
+      const response = await fetchWithoutCredentials(
+        `${WAHA_API_URL}/api/${currentSessionId}/chats/overview`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Error al obtener chats: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Chats obtenidos:', data.length);
+
+      let filteredData = data;
       if (debouncedSearch) {
         filteredData = data.filter((chat: any) => {
-          const name = chat.name || chat.id.split('@')[0]
-          return name.toLowerCase().includes(debouncedSearch.toLowerCase())
-        })
+          const name = chat.name || chat.id;
+          return name.toLowerCase().includes(debouncedSearch.toLowerCase());
+        });
       }
 
-      // Implement pagination
-      const pageSize = 20
-      const start = (currentPage - 1) * pageSize
-      const end = start + pageSize
-      const paginatedData = filteredData.slice(start, end)
-      setHasMore(end < filteredData.length)
+      // Aplicar paginación en el cliente
+      const start = offset;
+      const end = start + limit;
+      const paginatedData = filteredData.slice(start, end);
 
-      // Transform chat data
-      const enrichedChats: Chat[] = paginatedData.map((chat: any) => {
-        const phone = chat.id.split('@')[0]
-        return {
+      const enrichedChats: Chat[] = paginatedData.map((chat: any) => ({
+        id: chat.id,
+        contact: {
           id: chat.id,
-          contact: {
-            id: phone,
-            name: chat.name || phone,
-            phone: phone,
-            avatar: chat.picture
-          },
-          lastMessage: {
-            content: chat.lastMessage?.body || '',
-            timestamp: chat.lastMessage?.timestamp || new Date().toISOString(),
-            status: chat.lastMessage?.fromMe ? 'sent' : 'delivered'
-          },
-          unreadCount: chat.unreadCount || 0
-        }
-      })
+          name: chat.name || chat.id.split('@')[0],
+          phone: chat.id.split('@')[0],
+          avatar: chat.picture || null
+        },
+        lastMessage: chat.lastMessage ? {
+          content: chat.lastMessage.body || '',
+          timestamp: chat.lastMessage.timestamp ? 
+            new Date(chat.lastMessage.timestamp * 1000).toISOString() : 
+            new Date().toISOString(),
+          status: chat.lastMessage.fromMe ? 'sent' : 'delivered'
+        } : null,
+        unreadCount: chat.unreadCount || 0
+      }));
 
       if (resetPage || currentPage === 1) {
-        setChats(enrichedChats)
+        setChats(enrichedChats);
       } else {
-        setChats((prev: Chat[]) => [...prev, ...enrichedChats])
+        setChats(prev => [...prev, ...enrichedChats]);
       }
 
-      // Enrich with contact info
-      Promise.all(
-        paginatedData.map(async (chat: any, index: number) => {
-          const phone = chat.id.split('@')[0]
-          const contactInfo = await getContactInfo(currentSessionId, phone)
-          if (contactInfo?.name && contactInfo.name !== phone) {
-            return {
-              ...enrichedChats[index],
-              contact: {
-                ...enrichedChats[index].contact,
-                name: contactInfo.name,
-                avatar: contactInfo.profilePictureUrl || enrichedChats[index].contact.avatar
-              }
-            }
-          }
-          return enrichedChats[index]
-        })
-      ).then((updatedChats) => {
-        if (resetPage || currentPage === 1) {
-          setChats(updatedChats)
-        } else {
-          setChats((prev: Chat[]) => {
-            const nonUpdatedChats = prev.filter(
-              (chat) => !updatedChats.find((updated) => updated.id === chat.id)
-            )
-            return [...nonUpdatedChats, ...updatedChats]
-          })
-        }
-      })
-      
+      setHasMore(end < filteredData.length);
+
       if (resetPage) {
-        setPage(1)
+        setPage(1);
       }
+
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to fetch chats')
-      setChats([])
-    } finally {
-      setLoading(false)
+      console.error('❌ Error al obtener chats:', error);
+      setError(error instanceof Error ? error.message : 'Error al cargar los chats');
+      setChats([]);
     }
-  }
+  };
 
   const fetchMessages = async (chatId: string, loadMore = false) => {
     try {
-      if (!loadMore) {
-        setLoadingMessages(true)
-      } else {
-        setIsFetchingMoreMessages(true)
+      setError(null);
+
+      const currentSessionId = sessionId || await getSessionId();
+      if (!currentSessionId) {
+        throw new Error('No se pudo obtener el ID de sesión');
       }
-      setError(null)
 
-      const currentSessionId = sessionId || await getSessionId()
+      const currentMessagePage = loadMore ? messagePage + 1 : 1;
+      const offset = (currentMessagePage - 1) * MESSAGES_PER_PAGE;
 
-      // Si estamos cargando más mensajes, usamos el ID del mensaje más antiguo como referencia
-      const beforeMessageId = loadMore && messages.length > 0 ? messages[0].id : undefined
-
+      console.log('🔄 Obteniendo mensajes del chat:', chatId, loadMore ? '(cargando más)' : '');
       const response = await fetchWithoutCredentials(
-        `${WAHA_API_URL}/api/${currentSessionId}/chats/${chatId}/messages${beforeMessageId ? `?beforeMessageId=${beforeMessageId}&limit=${MESSAGES_PER_PAGE}` : ''}`
-      )
-      const data = await response.json()
+        `${WAHA_API_URL}/api/${currentSessionId}/chats/${chatId}/messages?limit=${MESSAGES_PER_PAGE}&offset=${offset}&downloadMedia=true`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error al obtener mensajes: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Mensajes obtenidos:', data.length);
 
       const transformedMessages = data.map((msg: any) => ({
         id: msg.id,
@@ -425,46 +402,75 @@ export function useChats() {
         },
         status: msg.ack === 3 ? 'read' : msg.ack === 2 ? 'delivered' : 'sent',
         hasMedia: msg.hasMedia,
-        mediaUrl: msg.media?.url,
-        mediaType: msg.media?.mimetype
-      }))
+        mediaUrl: msg.mediaUrl,
+        mediaType: msg.mediaType
+      }));
 
-      // Ordenar mensajes por timestamp
-      const sortByTimestamp = (a: MessageWithTimestamp, b: MessageWithTimestamp) => {
-        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      }
-
-      transformedMessages.sort(sortByTimestamp)
-
-      // Actualizar el estado de los mensajes
       if (loadMore) {
-        setMessages(prev => [...transformedMessages, ...prev])
+        setMessages(prev => [...prev, ...transformedMessages]);
+        setMessagePage(currentMessagePage);
       } else {
-        setMessages(transformedMessages)
+        setMessages(transformedMessages);
+        setMessagePage(1);
       }
 
-      // Actualizar si hay más mensajes para cargar
-      setHasMoreMessages(data.length >= MESSAGES_PER_PAGE)
+      setHasMoreMessages(data.length >= MESSAGES_PER_PAGE);
 
     } catch (error) {
-      console.error('Error fetching messages:', error)
-      setError(error instanceof Error ? error.message : 'Failed to fetch messages')
+      console.error('Error fetching messages:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch messages');
       if (!loadMore) {
-        setMessages([])
-      }
-    } finally {
-      if (loadMore) {
-        setIsFetchingMoreMessages(false)
-      } else {
-        setLoadingMessages(false)
+        setMessages([]);
       }
     }
-  }
+  };
 
   const loadMoreMessages = async () => {
-    if (!activeChat || isFetchingMoreMessages || !hasMoreMessages) return
-    await fetchMessages(activeChat.id, messages[0].id)
-  }
+    if (!activeChat || isFetchingMoreMessages || !hasMoreMessages) return;
+    await fetchMessages(activeChat.id, true);
+  };
+
+  const formatChatId = (id: string) => {
+    if (!id) return id;
+    return id.includes('@') ? id : `${id}@c.us`;
+  };
+
+  const selectChat = async (chatId: string) => {
+    try {
+      if (!chatId) return;
+
+      console.log('🔄 Seleccionando chat:', chatId);
+
+      // Get chat info for name
+      const selectedChat = chats.find(chat => chat.id === chatId);
+      if (!selectedChat) {
+        console.error('❌ Chat no encontrado. Chat buscado:', chatId);
+        console.error('Chats disponibles:', chats.map(c => c.id));
+        throw new Error('Chat no encontrado');
+      }
+
+      // Si es el mismo chat activo, solo actualizamos mensajes
+      if (activeChat?.id === chatId) {
+        await fetchMessages(chatId);
+        return;
+      }
+
+      // Establecer el chat activo inmediatamente para mejor UX
+      setActiveChat(selectedChat);
+
+      // Obtener conversación y mensajes en paralelo
+      const [conversation, messages] = await Promise.all([
+        createOrGetConversation(chatId, selectedChat),
+        fetchMessages(chatId, false)
+      ]);
+
+      setCurrentConversation(conversation);
+
+    } catch (err) {
+      console.error('❌ Error en selectChat:', err);
+      setError(err instanceof Error ? err.message : 'Error al cargar el chat');
+    }
+  };
 
   const sendMessage = async (content: string) => {
     if (!activeChat || sendingMessage) return;
@@ -474,12 +480,12 @@ export function useChats() {
       setError(null);
 
       const currentSessionId = sessionId || await getSessionId();
-      const chatId = `${activeChat.id}@c.us`;
+      if (!currentSessionId) throw new Error('No session ID found');
 
       const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/sendText`, {
         method: 'POST',
         body: JSON.stringify({
-          chatId,
+          chatId: activeChat.id,
           text: content,
           session: currentSessionId,
           linkPreview: true
@@ -503,6 +509,16 @@ export function useChats() {
       };
 
       setMessages(prev => [...prev, newMessage]);
+
+      // Actualizar el último mensaje en el chat activo
+      updateChat(activeChat.id, {
+        lastMessage: {
+          content,
+          timestamp: new Date().toISOString(),
+          status: 'sent'
+        }
+      });
+
       return newMessage;
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to send message');
@@ -527,31 +543,6 @@ export function useChats() {
     }
   }
 
-  const selectChat = async (chatId: string) => {
-    try {
-      setLoading(true)
-      setActiveChat(chatId)
-      
-      if (!clientId) throw new Error('No client ID found')
-
-      // Get chat info for name
-      const selectedChat = chats.find(chat => chat.id === chatId)
-      if (!selectedChat) throw new Error('Chat not found')
-
-      // Create or get conversation and related records
-      const conversation = await createOrGetConversation(chatId, selectedChat)
-      setCurrentConversation(conversation)
-      
-      // Fetch messages for the chat
-      await fetchMessages(chatId)
-    } catch (err) {
-      console.error('Error in selectChat:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load chat')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   // Load more chats
   const loadMore = () => {
     if (hasMore && !loading && activeChat) {
@@ -559,18 +550,12 @@ export function useChats() {
     }
   }
 
-  // Effect for search
-  useEffect(() => {
-    if (sessionId) {
-      fetchChats(true)
-    }
-  }, [debouncedSearch])
-
   // Initial setup
   useEffect(() => {
     if (!userId) return;
 
     let isMounted = true;
+    let wsCleanup: (() => void) | null = null;
 
     const initChats = async () => {
       try {
@@ -582,24 +567,119 @@ export function useChats() {
         await initSession(currentSessionId);
         if (!isMounted) return;
 
-        await fetchChats();
+        // Cargar chats solo si no hay
+        if (chats.length === 0) {
+          await fetchChats();
+        }
+
+        // Configurar WebSocket
+        if (!wsCleanup) {
+          wsCleanup = setupWebSocket(currentSessionId);
+        }
       } catch (error) {
         if (!isMounted) return;
         console.error('Error initializing chats:', error);
         setError('Failed to initialize chats');
-        setLoading(false);
       }
     };
 
     initChats();
 
-    // Función de limpieza
     return () => {
       isMounted = false;
-      // Cancelar todas las solicitudes pendientes
-      pb.autoCancellation(false);
+      if (wsCleanup) {
+        wsCleanup();
+        wsCleanup = null;
+      }
     };
   }, [userId]);
+
+  // Effect for search - optimizado para evitar recargas innecesarias
+  useEffect(() => {
+    if (!sessionId || !debouncedSearch) return;
+    
+    // No hacemos nada aquí - la búsqueda será manual
+  }, [debouncedSearch, sessionId]);
+
+  // Separar la lógica del WebSocket en una función independiente
+  const setupWebSocket = (sessionId: string) => {
+    console.log('🔄 Configurando WebSocket...')
+    
+    const wsUrl = WAHA_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws'
+    let ws: WebSocket | null = null
+    let reconnectTimeout: NodeJS.Timeout | null = null
+    let reconnectAttempts = 0
+    const MAX_RECONNECT_ATTEMPTS = 5
+    let isIntentionalClose = false
+
+    const connect = () => {
+      if (isIntentionalClose || ws?.readyState === WebSocket.OPEN) return;
+
+      try {
+        ws = new WebSocket(wsUrl)
+
+        ws.onopen = () => {
+          console.log('✅ WebSocket conectado')
+          reconnectAttempts = 0
+          // Enviar autenticación después de un breve retraso
+          setTimeout(() => {
+            ws?.send(JSON.stringify({
+              type: 'auth',
+              session: sessionId // Cambiado de sessionId a session
+            }))
+          }, 100)
+        }
+
+        ws.onmessage = async (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            if (data.event === 'message.new' || data.event === 'message') {
+              await handleIncomingMessage(data)
+            }
+          } catch (error) {
+            console.error('❌ Error procesando mensaje WebSocket:', error)
+          }
+        }
+
+        ws.onerror = (error) => {
+          if (!isIntentionalClose) {
+            console.error('❌ Error en WebSocket:', error)
+          }
+        }
+
+        ws.onclose = (event) => {
+          console.log('WebSocket cerrado con código:', event.code)
+          if (!isIntentionalClose && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+            console.log(`🔄 Reconectando en ${delay/1000}s...`)
+            if (reconnectTimeout) clearTimeout(reconnectTimeout)
+            reconnectTimeout = setTimeout(() => {
+              reconnectAttempts++
+              connect()
+            }, delay)
+          }
+        }
+      } catch (error) {
+        if (!isIntentionalClose) {
+          console.error('❌ Error al crear WebSocket:', error)
+        }
+      }
+    }
+
+    connect()
+
+    return () => {
+      isIntentionalClose = true
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+        reconnectTimeout = null
+      }
+      if (ws) {
+        ws.close()
+        ws = null
+      }
+    }
+  }
 
   const searchWhatsAppProfile = async (phone: string) => {
     try {
@@ -670,43 +750,21 @@ export function useChats() {
     try {
       const { session, payload } = wahaMessage;
       
-      console.log('📱 MENSAJE NUEVO RECIBIDO:', {
-        session,
-        from: payload.from,
-        body: payload.body,
-        timestamp: payload.timestamp,
-        notifyName: payload._data?.notifyName
-      });
-      
       if (!payload || !payload.from) {
         console.error('❌ Mensaje inválido:', wahaMessage);
         return;
       }
 
-      // Limpiar el ID del chat (remover @c.us o @s.whatsapp.net)
-      const cleanChatId = payload.from.split('@')[0];
-
-      // Verificar si el mensaje es para el chat activo
-      const isActiveChat = activeChat && (
-        cleanChatId === activeChat || 
-        payload.from === activeChat ||
-        `${cleanChatId}@c.us` === activeChat
-      );
-
-      console.log('🔍 Verificación de chat:', {
-        cleanChatId,
-        activeChat,
-        isActiveChat
-      });
+      const isActiveChat = activeChat?.id === payload.from;
 
       const newMessage: Message = {
         id: payload.id,
         content: payload.body,
         timestamp: new Date(payload.timestamp * 1000).toISOString(),
         sender: {
-          id: cleanChatId,
+          id: payload.from,
           type: 'contact',
-          name: payload._data?.notifyName || cleanChatId
+          name: payload._data?.notifyName
         },
         status: 'delivered',
         hasMedia: payload.hasMedia,
@@ -714,121 +772,35 @@ export function useChats() {
         mediaType: payload.mediaType
       };
 
-      // SIEMPRE actualizar la lista de chats primero
-      console.log('🔄 Actualizando lista de chats...');
-      await fetchChats();
-
-      // Si es el chat activo, actualizar los mensajes inmediatamente
+      // Actualizar mensajes si es el chat activo
       if (isActiveChat) {
-        console.log('✅ Agregando mensaje al chat activo');
         setMessages(prev => [...prev, newMessage]);
+      }
+
+      // Actualizar el chat en la lista sin recargar
+      const targetChat = chats.find(chat => chat.id === payload.from);
+      if (targetChat) {
+        const updatedChat: Chat = {
+          ...targetChat,
+          lastMessage: {
+            content: payload.body,
+            timestamp: new Date(payload.timestamp * 1000).toISOString(),
+            status: 'delivered' as const
+          },
+          unreadCount: isActiveChat ? 0 : targetChat.unreadCount + 1
+        };
+
+        // Actualizar el chat en la lista manteniendo el orden
+        setChats(prev => {
+          const otherChats = prev.filter(c => c.id !== payload.from);
+          return [updatedChat, ...otherChats];
+        });
       }
 
     } catch (error) {
       console.error('❌ Error procesando mensaje entrante:', error);
     }
   };
-
-  // Subscribe to webhook events
-  useEffect(() => {
-    if (!sessionId) return;
-
-    console.log('🔄 Configurando WebSocket...');
-    
-    const wsUrl = WAHA_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws';
-    console.log('📡 WebSocket URL:', wsUrl);
-    
-    let ws: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout;
-    let reconnectAttempts = 0;
-    const MAX_RECONNECT_ATTEMPTS = 5;
-
-    const connect = () => {
-      try {
-        ws = new WebSocket(wsUrl);
-
-        ws.onopen = () => {
-          console.log('✅ WebSocket conectado');
-          reconnectAttempts = 0;
-          // Enviar mensaje de autenticación
-          ws?.send(JSON.stringify({
-            type: 'auth',
-            sessionId: sessionId
-          }));
-        };
-
-        ws.onmessage = async (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log('📨 Evento WebSocket recibido:', data);
-            
-            // Manejar diferentes tipos de eventos
-            if (data.event === 'message.new' || data.event === 'message') {
-              await handleIncomingMessage(data);
-            } else if (data.event === 'message.update' || data.event === 'message.ack') {
-              // Actualizar el estado del mensaje
-              console.log('🔄 Actualizando estado del mensaje:', data);
-              await fetchChats();
-            }
-          } catch (error) {
-            console.error('❌ Error procesando evento WebSocket:', error);
-          }
-        };
-
-        ws.onerror = (error) => {
-          console.error('❌ Error en WebSocket:', error);
-        };
-
-        ws.onclose = () => {
-          console.log('❌ WebSocket desconectado');
-          
-          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-            console.log(`🔄 Intentando reconectar en ${delay/1000} segundos...`);
-            
-            reconnectTimeout = setTimeout(() => {
-              reconnectAttempts++;
-              connect();
-            }, delay);
-          } else {
-            console.error('❌ Se alcanzó el límite máximo de intentos de reconexión');
-          }
-        };
-      } catch (error) {
-        console.error('❌ Error al crear WebSocket:', error);
-      }
-    };
-
-    connect();
-
-    // Configurar webhooks al iniciar la sesión
-    const setupWebhooks = async () => {
-      try {
-        const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/sessions/${sessionId}/webhooks`, {
-          method: 'POST',
-          body: JSON.stringify({
-            url: `${window.location.origin}/api/webhooks/waha`,
-            events: ['message', 'message.ack', 'message.reaction', 'message.update']
-          })
-        });
-
-        console.log('✅ Webhooks configurados correctamente');
-      } catch (error) {
-        console.error('❌ Error configurando webhooks:', error);
-      }
-    };
-
-    setupWebhooks();
-
-    return () => {
-      console.log('🔄 Limpiando conexión WebSocket...');
-      clearTimeout(reconnectTimeout);
-      if (ws) {
-        ws.close();
-        ws = null;
-      }
-    };
-  }, [sessionId]);
 
   const markAsUnread = async (chatId: string) => {
     try {

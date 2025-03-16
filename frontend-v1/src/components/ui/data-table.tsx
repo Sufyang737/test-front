@@ -1,3 +1,5 @@
+"use client"
+
 import { useState } from 'react'
 import {
   ColumnDef,
@@ -7,7 +9,9 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   SortingState,
-} from '@tanstack/react-table'
+  getFilteredRowModel,
+  ColumnFiltersState,
+} from "@tanstack/react-table"
 import {
   Table,
   TableBody,
@@ -27,6 +31,8 @@ interface DataTableProps<TData, TValue> {
   loading?: boolean
   error?: string | null
   onRetry?: () => void
+  searchKey?: string
+  searchPlaceholder?: string
 }
 
 export function DataTable<TData, TValue>({
@@ -34,9 +40,12 @@ export function DataTable<TData, TValue>({
   data,
   loading,
   error,
-  onRetry
+  onRetry,
+  searchKey,
+  searchPlaceholder = "Search..."
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
   const table = useReactTable({
     data,
@@ -45,8 +54,11 @@ export function DataTable<TData, TValue>({
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
     state: {
       sorting,
+      columnFilters,
     },
   })
 
@@ -76,15 +88,18 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center py-4">
-        <Input
-          placeholder="Filter..."
-          className="max-w-sm"
-          onChange={(event) =>
-            table.getColumn('name_template')?.setFilterValue(event.target.value)
-          }
-        />
-      </div>
+      {searchKey && (
+        <div className="flex items-center py-4">
+          <Input
+            placeholder={searchPlaceholder}
+            value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
+            onChange={(event) =>
+              table.getColumn(searchKey)?.setFilterValue(event.target.value)
+            }
+            className="max-w-sm"
+          />
+        </div>
+      )}
       <div className="rounded-md border">
         <Table>
           <TableHeader>

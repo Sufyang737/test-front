@@ -23,7 +23,12 @@ export async function GET(request: Request) {
     if (!chatId || !clientId) {
       return NextResponse.json(
         { error: 'Chat ID and Client ID are required' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       )
     }
 
@@ -40,6 +45,10 @@ export async function GET(request: Request) {
           useBot: false,
           category: 'general'
         }
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
       })
     }
 
@@ -49,6 +58,10 @@ export async function GET(request: Request) {
       record: {
         useBot: conversation.use_bot,
         category: conversation.category
+      }
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
       }
     })
   } catch (error: any) {
@@ -60,7 +73,12 @@ export async function GET(request: Request) {
           error: 'Error de permisos',
           details: 'Token de admin inválido o expirado'
         },
-        { status: 403 }
+        { 
+          status: 403,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       )
     }
 
@@ -70,7 +88,12 @@ export async function GET(request: Request) {
           error: 'La solicitud fue cancelada',
           details: 'Por favor, intenta de nuevo'
         },
-        { status: 408 }
+        { 
+          status: 408,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       )
     }
 
@@ -79,7 +102,12 @@ export async function GET(request: Request) {
         error: 'Error procesando la solicitud',
         details: error.message
       },
-      { status: error.status || 500 }
+      { 
+        status: error.status || 500,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
     )
   }
 }

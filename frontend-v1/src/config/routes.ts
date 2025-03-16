@@ -8,7 +8,8 @@ import {
   Users,
   Smartphone,
   ShoppingBag,
-  FileText
+  FileText,
+  KanbanSquare
 } from "lucide-react"
 
 interface Route {
@@ -42,7 +43,7 @@ export const routes: RouteSection[] = [
         href: "/dashboard/chats",
       },
       {
-        label: "Contactos",
+        label: "Contacts",
         icon: Users,
         href: "/dashboard/contacts",
       },
@@ -70,6 +71,11 @@ export const routes: RouteSection[] = [
         label: "Catálogo",
         icon: FileText,
         href: "/dashboard/catalog",
+      },
+      {
+        label: "Templates",
+        icon: KanbanSquare,
+        href: "/dashboard/templates",
       }
     ],
   },

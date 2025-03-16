@@ -45,7 +45,7 @@ export function ChatList() {
             key={chat.id}
             chat={chat}
             isActive={activeChat?.id === chat.id}
-            onClick={() => selectChat(chat)}
+            onClick={() => selectChat(chat.id)}
             onArchive={() => toggleArchiveChat(chat.id, true)}
           />
         ))}

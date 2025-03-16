@@ -1248,3 +1248,117 @@ Common error responses:
    - Cache responses when appropriate
    - Use proper status codes
    - Minimize database queries
+
+## Contact Management Module
+
+The contact management module provides a complete interface for managing contacts and leads with detailed information and status tracking.
+
+### Features
+
+#### Contact Management
+- **Contact Information**: Store and manage contact details
+  - Name and company information
+  - Company description
+  - Social media links (Instagram, Facebook, X/Twitter)
+- **Status Tracking**: Visual indicators for contact status
+  - Priority levels with color coding
+  - Conversation status tracking
+  - Request type categorization
+  - Customer source tracking
+
+#### Contact Interface
+1. **Contact List**
+   - Responsive data table with sorting and filtering
+   - Visual status indicators with badges
+   - Quick actions menu for each contact
+   - Color-coded priority levels
+   - Spanish language interface
+
+2. **Contact Details**
+   - Company information section
+   - Social media links
+   - Status indicators
+   - Priority management
+   - Source tracking
+
+3. **Status Management**
+   - Priority levels (Alta/Media/Baja)
+   - Conversation status (Abierto/Cerrado/Pendiente)
+   - Request types (Soporte Técnico/Ventas/Consulta General/Reclamo)
+   - Customer sources (Referido/Redes Sociales/Sitio Web/WhatsApp)
+
+### Technical Implementation
+
+1. **Data Model**
+```typescript
+interface ContactData {
+  id: string
+  name_client: string
+  name_company: string
+  description_company?: string
+  instagram?: string
+  facebook?: string
+  x?: string
+  client_id: string
+  details?: {
+    id: string
+    lead_id: string
+    client_id: string
+    priority: "high" | "medium" | "low"
+    customer_source: "referral" | "social" | "website" | "whatsapp"
+    conversation_status: "open" | "closed" | "pending"
+    request_type: "technical support" | "sales" | "general inquiry" | "complaint"
+  }
+}
+```
+
+2. **PocketBase Collections**
+   - `profile_lead`: Main contact information
+   - `details_conversation`: Contact status and details
+
+3. **Components**
+   - `ContactsViewPage`: Main contact management interface
+   - `ContactForm`: Form for editing contact information
+   - `ContactActions`: Contact action menu
+   - `columns`: Table column definitions with status badges
+
+### Usage
+
+1. **Viewing Contacts**
+   - Navigate to the contacts section
+   - View contact list with status indicators
+   - Sort and filter contacts
+   - See color-coded priorities and status badges
+
+2. **Editing Contacts**
+   - Click the actions menu on any contact
+   - Select "Editar"
+   - Modify contact information
+   - Update status and details
+   - Save changes
+
+3. **Status Management**
+   - Update priority levels with color indicators
+   - Manage conversation status
+   - Track request types
+   - Monitor customer sources
+
+### Dependencies
+
+```json
+{
+  "@tanstack/react-table": "latest",
+  "@clerk/nextjs": "latest",
+  "pocketbase": "latest",
+  "@hookform/resolvers/zod": "latest",
+  "zod": "latest"
+}
+```
+
+### Environment Setup
+
+Add these variables to your `.env.local`:
+```bash
+NEXT_PUBLIC_POCKETBASE_URL=your_pocketbase_url
+NEXT_PUBLIC_POCKETBASE_ADMIN_TOKEN=your_admin_token
+```
