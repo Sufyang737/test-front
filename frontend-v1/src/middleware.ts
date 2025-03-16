@@ -1,18 +1,22 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { withClerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default function middleware(request: Request) {
-  // Get the pathname
-  const pathname = new URL(request.url).pathname;
+export default withClerkMiddleware((req: NextRequest) => {
+  return NextResponse.next();
+});
 
-  // Clone the response and add the pathname to headers
-  const response = NextResponse.next();
-  response.headers.set('x-pathname', pathname);
-
-  // Call Clerk middleware
-  return clerkMiddleware()(request, response);
-}
-
+// Stop Middleware running on static files
 export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next
+     * - static (static files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    "/((?!static|.*\\..*|_next|favicon.ico).*)",
+    "/",
+  ],
 }; 

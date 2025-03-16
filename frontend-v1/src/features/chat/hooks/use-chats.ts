@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useChatStore, type Chat } from '../store/chat-store'
 import { useAuth } from '@clerk/nextjs'
-import PocketBase from 'pocketbase'
+import { pb } from '@/lib/pocketbase'
 import { useDebounce } from '@/hooks/use-debounce'
+import { ClientResponseError } from 'pocketbase'
 
-const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL
-const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL)
+const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL || ''
+const SESSION_ID = process.env.NEXT_PUBLIC_WAHA_SESSION_ID
 
 export interface Message {
   id: string
@@ -14,15 +15,12 @@ export interface Message {
   sender: {
     id: string
     type: 'user' | 'contact'
+    name?: string
   }
   status: 'sent' | 'delivered' | 'read'
-  payload?: {
-    from?: string
-    body?: string
-    _data?: {
-      notifyName?: string
-    }
-  }
+  hasMedia?: boolean
+  mediaUrl?: string
+  mediaType?: string
 }
 
 export interface WAHAMessage {
@@ -32,10 +30,30 @@ export interface WAHAMessage {
     from: string
     body: string
     timestamp: number
+    hasMedia?: boolean
+    mediaUrl?: string
+    mediaType?: string
     _data?: {
       notifyName?: string
     }
   }
+}
+
+interface Conversation {
+  id: string
+  client_id: string
+  use_bot: boolean
+  name: string
+  number_client: string
+  category: string
+  finished_chat: boolean
+  chat_id: string
+  created: string
+  updated: string
+}
+
+interface MessageWithTimestamp {
+  timestamp: string
 }
 
 export function useChats() {
@@ -49,47 +67,162 @@ export function useChats() {
   const [searchQuery, setSearchQuery] = useState('')
   const [hasMore, setHasMore] = useState(true)
   const [page, setPage] = useState(1)
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null)
+  const [isUpdatingBot, setIsUpdatingBot] = useState(false)
   const debouncedSearch = useDebounce(searchQuery, 500)
+  const [hasMoreMessages, setHasMoreMessages] = useState(true)
+  const [messagePage, setMessagePage] = useState(1)
+  const [isFetchingMoreMessages, setIsFetchingMoreMessages] = useState(false)
+  const MESSAGES_PER_PAGE = 20
 
   const getSessionId = async () => {
     try {
-      if (!userId) throw new Error('No user ID found')
+      // Crear una señal de cancelación
+      const cancelSignal = new AbortController();
 
       const records = await pb.collection('clients').getList(1, 1, {
-        filter: `clerk_id = "${userId}"`
+        filter: `clerk_id = "${userId}"`,
+        $cancelKey: `get-session-${userId}`, // Clave única para esta solicitud
+        $autoCancel: false // Deshabilitar la cancelación automática
+      });
+
+      if (records.items.length > 0) {
+        const client = records.items[0];
+        setClientId(client.id);
+        setSessionId(client.session_id); // Guardar el sessionId en el estado
+        return client.session_id;
+      }
+
+      throw new Error('No session found');
+    } catch (error) {
+      // Verificar si el error es por cancelación
+      if (error instanceof ClientResponseError && error.isAbort) {
+        console.log('Request cancelled:', error);
+        return null;
+      }
+      console.error('Error getting session:', error);
+      throw error;
+    }
+  };
+
+  const initSession = async (sessionId: string) => {
+    try {
+      if (!WAHA_API_URL) {
+        console.error('❌ WAHA_API_URL no está configurada')
+        throw new Error('WAHA API URL no configurada. Verifica tu archivo .env.local')
+      }
+
+      console.log('🔄 Intentando inicializar sesión...')
+      console.log('URL:', WAHA_API_URL)
+      console.log('Session ID:', sessionId)
+
+      // Verificar el estado de la sesión
+      const response = await fetch(`${WAHA_API_URL}/api/sessions`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        }
       })
 
-      if (records.items.length === 0) {
-        throw new Error('No client record found')
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Error al verificar sesiones:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        })
+        throw new Error(`Error al verificar sesiones: ${response.status} ${response.statusText}`)
       }
 
-      const client = records.items[0]
-      if (!client.session_id) {
-        throw new Error('No WhatsApp session found. Please connect your WhatsApp first.')
+      const sessions = await response.json()
+      console.log('✅ Sesiones disponibles:', sessions)
+      const existingSession = sessions.find((s: any) => s.name === sessionId)
+
+      if (existingSession) {
+        console.log('✅ Sesión existente encontrada:', existingSession.status)
+        if (existingSession.status === 'WORKING') {
+          return existingSession
+        }
       }
 
-      setSessionId(client.session_id)
-      setClientId(client.id)
-      return client.session_id
+      // Si no existe la sesión o no está en estado WORKING, intentar iniciarla
+      const startResponse = await fetch(`${WAHA_API_URL}/api/sessions/${sessionId}/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        }
+      })
+
+      if (!startResponse.ok) {
+        const errorData = await startResponse.text()
+        console.error('❌ Error al iniciar sesión:', {
+          status: startResponse.status,
+          statusText: startResponse.statusText,
+          error: errorData
+        })
+        throw new Error(`Error al iniciar sesión: ${startResponse.status} ${startResponse.statusText}`)
+      }
+
+      const data = await startResponse.json()
+      console.log('✅ Sesión iniciada correctamente:', data)
+      return data
     } catch (error) {
-      console.error('Error getting session ID:', error)
+      console.error('❌ Error detallado al inicializar sesión:', error)
       throw error
     }
   }
 
-  const createOrGetConversation = async (chatId: string, selectedChat: any) => {
+  const fetchWithoutCredentials = async (url: string, options: RequestInit = {}) => {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(options.headers || {})
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Error en petición a ${url}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error(`Error en petición: ${response.status} ${response.statusText}`);
+    }
+
+    return response;
+  };
+
+  const getContactInfo = async (sessionId: string, phone: string) => {
+    try {
+      const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/contacts?session=${sessionId}&phone=${phone}`);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.warn('⚠️ No se pudo obtener info del contacto:', error);
+      return {
+        name: phone,
+        profilePictureUrl: null
+      };
+    }
+  };
+
+  const createOrGetConversation = async (chatId: string, selectedChat: Chat): Promise<Conversation> => {
     try {
       if (!clientId) throw new Error('No client ID found')
 
       // First check if conversation exists
       try {
-        const existingConversations = await pb.collection('conversation').getList(1, 1, {
+        const existingConversations = await pb.collection('conversation').getList<Conversation>(1, 1, {
           filter: `chat_id = "${chatId}" && client_id = "${clientId}"`,
           requestKey: null
         })
 
         if (existingConversations.items.length > 0) {
-          console.log('Found existing conversation:', existingConversations.items[0])
           return existingConversations.items[0]
         }
       } catch (error) {
@@ -98,21 +231,20 @@ export function useChats() {
       }
 
       // Create new conversation first
-      let conversation
+      let conversation: Conversation
       try {
         const phoneNumber = chatId.split('@')[0]
         const conversationData = {
           client_id: clientId,
           name: selectedChat.contact.name,
-          number_client: parseInt(phoneNumber),
+          number_client: phoneNumber,
           category: "general",
           finished_chat: false,
           chat_id: chatId,
           use_bot: false
         }
 
-        conversation = await pb.collection('conversation').create(conversationData)
-        console.log('New conversation created:', conversation)
+        conversation = await pb.collection('conversation').create<Conversation>(conversationData)
       } catch (error) {
         console.error('Error creating conversation:', error)
         throw new Error('Failed to create conversation record')
@@ -133,7 +265,6 @@ export function useChats() {
         }
 
         const profile = await pb.collection('profile_lead').create(profileData)
-        console.log('Profile lead created:', profile)
 
         // Then create conversation details with the lead_id
         const detailsData = {
@@ -147,22 +278,8 @@ export function useChats() {
           notes: "",
           assigned_to: ""
         }
-
-        console.log('Creating details with data:', detailsData)
-        console.log('Conversation ID:', conversation.id)
-        console.log('Client ID:', clientId)
         
-        try {
-          const details = await pb.collection('details_conversation').create(detailsData)
-          console.log('Conversation details created successfully:', details)
-        } catch (detailsError: any) {
-          console.error('Error response from PocketBase:', detailsError.response)
-          console.error('Error data:', detailsError.data)
-          console.error('Error status:', detailsError.status)
-          console.error('Full error object:', JSON.stringify(detailsError, null, 2))
-          console.error('Available schema:', await pb.collection('details_conversation').getFullList())
-          throw detailsError
-        }
+        await pb.collection('details_conversation').create(detailsData)
 
       } catch (error) {
         // If any of the related records fail to create, delete the conversation
@@ -170,10 +287,9 @@ export function useChats() {
           try {
             await pb.collection('conversation').delete(conversation.id)
           } catch (deleteError) {
-            console.warn('Failed to cleanup conversation:', deleteError)
+            console.error('Error deleting conversation after failed related records:', deleteError)
           }
         }
-
         console.error('Error creating related records:', error)
         throw new Error('Failed to create related records. Please ensure all collections are properly configured.')
       }
@@ -185,27 +301,6 @@ export function useChats() {
     }
   }
 
-  const getContactInfo = async (sessionId: string, phone: string) => {
-    try {
-      const response = await fetch(`${WAHA_API_URL}/api/contacts?session=${sessionId}&phone=${phone}`)
-      if (!response.ok) {
-        console.warn(`Failed to fetch contact info for ${phone}:`, await response.text())
-        return {
-          name: phone,
-          profilePictureUrl: null
-        }
-      }
-      const data = await response.json()
-      return data
-    } catch (error) {
-      console.warn('Error fetching contact info:', error)
-      return {
-        name: phone,
-        profilePictureUrl: null
-      }
-    }
-  }
-
   const fetchChats = async (resetPage = false) => {
     try {
       setLoading(true)
@@ -214,16 +309,8 @@ export function useChats() {
       const currentSessionId = sessionId || await getSessionId()
       const currentPage = resetPage ? 1 : page
 
-      // Fetch chats from WAHA API with pagination
-      const response = await fetch(`${WAHA_API_URL}/api/${currentSessionId}/chats/overview`)
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('WAHA API Error:', errorText)
-        throw new Error(`Failed to fetch chats: ${errorText}`)
-      }
-
+      const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/${currentSessionId}/chats/overview`)
       const data = await response.json()
-      console.log('Chats overview:', data)
       
       // Filter chats based on search query
       let filteredData = data
@@ -241,7 +328,7 @@ export function useChats() {
       const paginatedData = filteredData.slice(start, end)
       setHasMore(end < filteredData.length)
 
-      // Transform chat data (without waiting for contact info)
+      // Transform chat data
       const enrichedChats: Chat[] = paginatedData.map((chat: any) => {
         const phone = chat.id.split('@')[0]
         return {
@@ -261,14 +348,13 @@ export function useChats() {
         }
       })
 
-      // Update state immediately with basic data
       if (resetPage || currentPage === 1) {
         setChats(enrichedChats)
       } else {
         setChats((prev: Chat[]) => [...prev, ...enrichedChats])
       }
 
-      // Then enrich with contact info in background
+      // Enrich with contact info
       Promise.all(
         paginatedData.map(async (chat: any, index: number) => {
           const phone = chat.id.split('@')[0]
@@ -302,7 +388,6 @@ export function useChats() {
         setPage(1)
       }
     } catch (error) {
-      console.error('Error fetching chats:', error)
       setError(error instanceof Error ? error.message : 'Failed to fetch chats')
       setChats([])
     } finally {
@@ -310,54 +395,75 @@ export function useChats() {
     }
   }
 
-  const fetchMessages = async (chatId: string) => {
+  const fetchMessages = async (chatId: string, loadMore = false) => {
     try {
-      setLoadingMessages(true)
+      if (!loadMore) {
+        setLoadingMessages(true)
+      } else {
+        setIsFetchingMoreMessages(true)
+      }
       setError(null)
 
       const currentSessionId = sessionId || await getSessionId()
 
-      // Fetch messages from WAHA API
-      const response = await fetch(`${WAHA_API_URL}/api/${currentSessionId}/chats/${chatId}/messages`)
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('WAHA API Error:', errorText)
-        throw new Error(`Failed to fetch messages: ${errorText}`)
-      }
+      // Si estamos cargando más mensajes, usamos el ID del mensaje más antiguo como referencia
+      const beforeMessageId = loadMore && messages.length > 0 ? messages[0].id : undefined
 
+      const response = await fetchWithoutCredentials(
+        `${WAHA_API_URL}/api/${currentSessionId}/chats/${chatId}/messages${beforeMessageId ? `?beforeMessageId=${beforeMessageId}&limit=${MESSAGES_PER_PAGE}` : ''}`
+      )
       const data = await response.json()
-      console.log('Chat messages:', data)
 
-      // Transform messages to our format
       const transformedMessages = data.map((msg: any) => ({
         id: msg.id,
         content: msg.body || '',
         timestamp: msg.timestamp ? new Date(msg.timestamp * 1000).toISOString() : new Date().toISOString(),
         sender: {
           id: msg.fromMe ? 'me' : (msg.from || '').split('@')[0],
-          type: msg.fromMe ? 'user' : 'contact'
+          type: msg.fromMe ? 'user' : 'contact',
+          name: msg._data?.notifyName
         },
         status: msg.ack === 3 ? 'read' : msg.ack === 2 ? 'delivered' : 'sent',
-        payload: {
-          from: msg.from,
-          body: msg.body,
-          _data: msg._data
-        }
+        hasMedia: msg.hasMedia,
+        mediaUrl: msg.media?.url,
+        mediaType: msg.media?.mimetype
       }))
 
-      // Sort messages by timestamp
-      transformedMessages.sort((a, b) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      )
+      // Ordenar mensajes por timestamp
+      const sortByTimestamp = (a: MessageWithTimestamp, b: MessageWithTimestamp) => {
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      }
 
-      setMessages(transformedMessages)
+      transformedMessages.sort(sortByTimestamp)
+
+      // Actualizar el estado de los mensajes
+      if (loadMore) {
+        setMessages(prev => [...transformedMessages, ...prev])
+      } else {
+        setMessages(transformedMessages)
+      }
+
+      // Actualizar si hay más mensajes para cargar
+      setHasMoreMessages(data.length >= MESSAGES_PER_PAGE)
+
     } catch (error) {
       console.error('Error fetching messages:', error)
       setError(error instanceof Error ? error.message : 'Failed to fetch messages')
-      setMessages([]) // Clear messages on error
+      if (!loadMore) {
+        setMessages([])
+      }
     } finally {
-      setLoadingMessages(false)
+      if (loadMore) {
+        setIsFetchingMoreMessages(false)
+      } else {
+        setLoadingMessages(false)
+      }
     }
+  }
+
+  const loadMoreMessages = async () => {
+    if (!activeChat || isFetchingMoreMessages || !hasMoreMessages) return
+    await fetchMessages(activeChat.id, messages[0].id)
   }
 
   const sendMessage = async (content: string) => {
@@ -368,14 +474,10 @@ export function useChats() {
       setError(null);
 
       const currentSessionId = sessionId || await getSessionId();
-      const chatId = `${activeChat}@c.us`; // Ensure proper WhatsApp chat ID format
+      const chatId = `${activeChat.id}@c.us`;
 
-      // Send message using WAHA API
-      const response = await fetch(`${WAHA_API_URL}/api/sendText`, {
+      const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/sendText`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           chatId,
           text: content,
@@ -384,16 +486,8 @@ export function useChats() {
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('WAHA API Error:', errorText);
-        throw new Error(`Failed to send message: ${errorText}`);
-      }
-
       const responseData = await response.json();
-      console.log('Send message response:', responseData);
 
-      // Add message to local state
       const newMessage: Message = {
         id: responseData.key?.id || Date.now().toString(),
         content,
@@ -403,65 +497,14 @@ export function useChats() {
           type: 'user'
         },
         status: 'sent',
-        payload: {
-          from: `${clientId}@c.us`,
-          body: content
-        }
+        hasMedia: responseData.hasMedia,
+        mediaUrl: responseData.mediaUrl,
+        mediaType: responseData.mediaType
       };
 
       setMessages(prev => [...prev, newMessage]);
-
-      // Start polling for message status updates
-      const checkMessageStatus = async () => {
-        try {
-          const statusResponse = await fetch(
-            `${WAHA_API_URL}/api/${currentSessionId}/messages/${newMessage.id}`
-          );
-          
-          if (statusResponse.ok) {
-            const statusData = await statusResponse.json();
-            const newStatus = statusData.ack === 3 ? 'read' : 
-                            statusData.ack === 2 ? 'delivered' : 'sent';
-            
-            if (newStatus !== newMessage.status) {
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === newMessage.id 
-                    ? { ...msg, status: newStatus }
-                    : msg
-                )
-              );
-            }
-
-            // Stop polling if message is read
-            if (newStatus === 'read') {
-              return true;
-            }
-          }
-          return false;
-        } catch (error) {
-          console.error('Error checking message status:', error);
-          return false;
-        }
-      };
-
-      // Poll for status updates every 2 seconds for up to 30 seconds
-      let attempts = 0;
-      const maxAttempts = 15;
-      const pollInterval = setInterval(async () => {
-        attempts++;
-        const shouldStop = await checkMessageStatus();
-        if (shouldStop || attempts >= maxAttempts) {
-          clearInterval(pollInterval);
-        }
-      }, 2000);
-
-      // Refresh chat list to update last message
-      await fetchChats();
-
       return newMessage;
     } catch (error) {
-      console.error('Error sending message:', error);
       setError(error instanceof Error ? error.message : 'Failed to send message');
       throw error;
     } finally {
@@ -469,40 +512,43 @@ export function useChats() {
     }
   };
 
+  const toggleBotStatus = async (conversationId: string, newBotStatus: boolean) => {
+    try {
+      setIsUpdatingBot(true)
+      const updatedConversation = await pb.collection('conversations').update<Conversation>(conversationId, {
+        use_bot: newBotStatus
+      })
+      setCurrentConversation(updatedConversation)
+    } catch (err) {
+      setError('Failed to update bot status')
+      console.error('Error updating bot status:', err)
+    } finally {
+      setIsUpdatingBot(false)
+    }
+  }
+
   const selectChat = async (chatId: string) => {
     try {
-      console.log('Selecting chat:', chatId)
-      
-      // If chatId is empty (going back to chat list on mobile)
-      if (!chatId) {
-        setActiveChat('')
-        return
-      }
-
-      // Find the chat in our list
-      const selectedChat = chats.find(chat => chat.id === chatId)
-      if (!selectedChat) {
-        throw new Error('Chat not found in list')
-      }
-
-      console.log('Selected chat details:', {
-        id: selectedChat.id,
-        name: selectedChat.contact.name,
-        phone: selectedChat.contact.phone
-      })
-
-      // Create or get conversation record in PocketBase
-      const conversation = await createOrGetConversation(chatId, selectedChat)
-      console.log('Conversation record:', conversation)
-      
-      // Fetch messages for this chat
-      await fetchMessages(chatId)
-      
-      // Update active chat
+      setLoading(true)
       setActiveChat(chatId)
-    } catch (error) {
-      console.error('Error in selectChat:', error)
-      setError(error instanceof Error ? error.message : 'Failed to load chat')
+      
+      if (!clientId) throw new Error('No client ID found')
+
+      // Get chat info for name
+      const selectedChat = chats.find(chat => chat.id === chatId)
+      if (!selectedChat) throw new Error('Chat not found')
+
+      // Create or get conversation and related records
+      const conversation = await createOrGetConversation(chatId, selectedChat)
+      setCurrentConversation(conversation)
+      
+      // Fetch messages for the chat
+      await fetchMessages(chatId)
+    } catch (err) {
+      console.error('Error in selectChat:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load chat')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -513,54 +559,6 @@ export function useChats() {
     }
   }
 
-  // Subscribe to real-time updates using polling
-  useEffect(() => {
-    if (sessionId && activeChat) {
-      const pollInterval = setInterval(async () => {
-        try {
-          // Poll for new messages using WAHA API
-          const response = await fetch(`${WAHA_API_URL}/api/${sessionId}/chats/${activeChat}/messages`)
-          if (!response.ok) {
-            throw new Error('Failed to fetch messages')
-          }
-
-          const data = await response.json()
-          
-          // Transform messages to our format
-          const transformedMessages = data.map((msg: any) => ({
-            id: msg.id,
-            content: msg.body || '',
-            timestamp: msg.timestamp ? new Date(msg.timestamp * 1000).toISOString() : new Date().toISOString(),
-            sender: {
-              id: msg.fromMe ? 'me' : (msg.from || '').split('@')[0],
-              type: msg.fromMe ? 'user' : 'contact'
-            },
-            status: msg.ack === 3 ? 'read' : msg.ack === 2 ? 'delivered' : 'sent',
-            payload: {
-              from: msg.from,
-              body: msg.body,
-              _data: msg._data
-            }
-          }))
-
-          // Sort messages by timestamp
-          transformedMessages.sort((a, b) => 
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-          )
-
-          setMessages(transformedMessages)
-
-          // Poll for chat updates
-          await fetchChats()
-        } catch (error) {
-          console.error('Polling error:', error)
-        }
-      }, 3000) // Poll every 3 seconds
-
-      return () => clearInterval(pollInterval)
-    }
-  }, [sessionId, activeChat])
-
   // Effect for search
   useEffect(() => {
     if (sessionId) {
@@ -570,15 +568,38 @@ export function useChats() {
 
   // Initial setup
   useEffect(() => {
-    if (userId) {
-      getSessionId().then(() => {
-        fetchChats()
-      }).catch((error) => {
-        console.error('Initial setup error:', error)
-        setError(error instanceof Error ? error.message : 'Failed to initialize')
-      })
-    }
-  }, [userId])
+    if (!userId) return;
+
+    let isMounted = true;
+
+    const initChats = async () => {
+      try {
+        if (!isMounted) return;
+
+        const currentSessionId = await getSessionId();
+        if (!currentSessionId || !isMounted) return;
+
+        await initSession(currentSessionId);
+        if (!isMounted) return;
+
+        await fetchChats();
+      } catch (error) {
+        if (!isMounted) return;
+        console.error('Error initializing chats:', error);
+        setError('Failed to initialize chats');
+        setLoading(false);
+      }
+    };
+
+    initChats();
+
+    // Función de limpieza
+    return () => {
+      isMounted = false;
+      // Cancelar todas las solicitudes pendientes
+      pb.autoCancellation(false);
+    };
+  }, [userId]);
 
   const searchWhatsAppProfile = async (phone: string) => {
     try {
@@ -591,10 +612,7 @@ export function useChats() {
       const cleanPhone = phone.replace(/[\s+\-()]/g, '')
       
       // Check if contact exists
-      const checkResponse = await fetch(`${WAHA_API_URL}/api/contacts/check-exists?session=${sessionId}&phone=${cleanPhone}`)
-      if (!checkResponse.ok) {
-        throw new Error('Failed to check contact')
-      }
+      const checkResponse = await fetchWithoutCredentials(`${WAHA_API_URL}/api/contacts/check-exists?session=${sessionId}&phone=${cleanPhone}`)
       const exists = await checkResponse.json()
       
       if (!exists) {
@@ -602,18 +620,15 @@ export function useChats() {
       }
 
       // Get contact info
-      const contactResponse = await fetch(`${WAHA_API_URL}/api/contacts?session=${sessionId}&phone=${cleanPhone}`)
-      if (!contactResponse.ok) {
-        throw new Error('Failed to get contact info')
-      }
+      const contactResponse = await fetchWithoutCredentials(`${WAHA_API_URL}/api/contacts?session=${sessionId}&phone=${cleanPhone}`)
       const contactInfo = await contactResponse.json()
 
       // Get profile picture
-      const pictureResponse = await fetch(`${WAHA_API_URL}/api/contacts/profile-picture?session=${sessionId}&phone=${cleanPhone}`)
+      const pictureResponse = await fetchWithoutCredentials(`${WAHA_API_URL}/api/contacts/profile-picture?session=${sessionId}&phone=${cleanPhone}`)
       const pictureData = await pictureResponse.json()
 
       // Get about info
-      const aboutResponse = await fetch(`${WAHA_API_URL}/api/contacts/about?session=${sessionId}&phone=${cleanPhone}`)
+      const aboutResponse = await fetchWithoutCredentials(`${WAHA_API_URL}/api/contacts/about?session=${sessionId}&phone=${cleanPhone}`)
       const aboutData = await aboutResponse.json()
 
       // Get recent messages directly from PocketBase
@@ -647,7 +662,6 @@ export function useChats() {
 
       return profile
     } catch (error) {
-      console.error('Error searching WhatsApp profile:', error)
       throw error
     }
   }
@@ -656,33 +670,62 @@ export function useChats() {
     try {
       const { session, payload } = wahaMessage;
       
-      // Verify this message is for the current session
-      if (session !== sessionId) return;
+      console.log('📱 MENSAJE NUEVO RECIBIDO:', {
+        session,
+        from: payload.from,
+        body: payload.body,
+        timestamp: payload.timestamp,
+        notifyName: payload._data?.notifyName
+      });
       
-      // Format message to match our interface
+      if (!payload || !payload.from) {
+        console.error('❌ Mensaje inválido:', wahaMessage);
+        return;
+      }
+
+      // Limpiar el ID del chat (remover @c.us o @s.whatsapp.net)
+      const cleanChatId = payload.from.split('@')[0];
+
+      // Verificar si el mensaje es para el chat activo
+      const isActiveChat = activeChat && (
+        cleanChatId === activeChat || 
+        payload.from === activeChat ||
+        `${cleanChatId}@c.us` === activeChat
+      );
+
+      console.log('🔍 Verificación de chat:', {
+        cleanChatId,
+        activeChat,
+        isActiveChat
+      });
+
       const newMessage: Message = {
         id: payload.id,
         content: payload.body,
         timestamp: new Date(payload.timestamp * 1000).toISOString(),
         sender: {
-          id: payload.from.split('@')[0],
-          type: 'contact'
+          id: cleanChatId,
+          type: 'contact',
+          name: payload._data?.notifyName || cleanChatId
         },
         status: 'delivered',
-        payload: {
-          from: payload.from,
-          body: payload.body,
-          _data: payload._data
-        }
+        hasMedia: payload.hasMedia,
+        mediaUrl: payload.mediaUrl,
+        mediaType: payload.mediaType
       };
 
-      // Add message to state
-      setMessages(prev => [...prev, newMessage]);
-
-      // Refresh chat list to update last message
+      // SIEMPRE actualizar la lista de chats primero
+      console.log('🔄 Actualizando lista de chats...');
       await fetchChats();
+
+      // Si es el chat activo, actualizar los mensajes inmediatamente
+      if (isActiveChat) {
+        console.log('✅ Agregando mensaje al chat activo');
+        setMessages(prev => [...prev, newMessage]);
+      }
+
     } catch (error) {
-      console.error('Error handling incoming message:', error);
+      console.error('❌ Error procesando mensaje entrante:', error);
     }
   };
 
@@ -690,28 +733,124 @@ export function useChats() {
   useEffect(() => {
     if (!sessionId) return;
 
-    // Create WebSocket connection for real-time updates
-    const ws = new WebSocket(`${WAHA_API_URL.replace('http', 'ws')}/ws`);
+    console.log('🔄 Configurando WebSocket...');
+    
+    const wsUrl = WAHA_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws';
+    console.log('📡 WebSocket URL:', wsUrl);
+    
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
 
-    ws.onmessage = (event) => {
+    const connect = () => {
       try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'message') {
-          handleIncomingMessage(data);
-        }
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log('✅ WebSocket conectado');
+          reconnectAttempts = 0;
+          // Enviar mensaje de autenticación
+          ws?.send(JSON.stringify({
+            type: 'auth',
+            sessionId: sessionId
+          }));
+        };
+
+        ws.onmessage = async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('📨 Evento WebSocket recibido:', data);
+            
+            // Manejar diferentes tipos de eventos
+            if (data.event === 'message.new' || data.event === 'message') {
+              await handleIncomingMessage(data);
+            } else if (data.event === 'message.update' || data.event === 'message.ack') {
+              // Actualizar el estado del mensaje
+              console.log('🔄 Actualizando estado del mensaje:', data);
+              await fetchChats();
+            }
+          } catch (error) {
+            console.error('❌ Error procesando evento WebSocket:', error);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('❌ Error en WebSocket:', error);
+        };
+
+        ws.onclose = () => {
+          console.log('❌ WebSocket desconectado');
+          
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+            console.log(`🔄 Intentando reconectar en ${delay/1000} segundos...`);
+            
+            reconnectTimeout = setTimeout(() => {
+              reconnectAttempts++;
+              connect();
+            }, delay);
+          } else {
+            console.error('❌ Se alcanzó el límite máximo de intentos de reconexión');
+          }
+        };
       } catch (error) {
-        console.error('WebSocket message error:', error);
+        console.error('❌ Error al crear WebSocket:', error);
       }
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    connect();
+
+    // Configurar webhooks al iniciar la sesión
+    const setupWebhooks = async () => {
+      try {
+        const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/sessions/${sessionId}/webhooks`, {
+          method: 'POST',
+          body: JSON.stringify({
+            url: `${window.location.origin}/api/webhooks/waha`,
+            events: ['message', 'message.ack', 'message.reaction', 'message.update']
+          })
+        });
+
+        console.log('✅ Webhooks configurados correctamente');
+      } catch (error) {
+        console.error('❌ Error configurando webhooks:', error);
+      }
     };
 
+    setupWebhooks();
+
     return () => {
-      ws.close();
+      console.log('🔄 Limpiando conexión WebSocket...');
+      clearTimeout(reconnectTimeout);
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
     };
   }, [sessionId]);
+
+  const markAsUnread = async (chatId: string) => {
+    try {
+      if (!sessionId) {
+        const currentSessionId = await getSessionId();
+        if (!currentSessionId) throw new Error('No session ID found');
+      }
+
+      const response = await fetchWithoutCredentials(`${WAHA_API_URL}/api/${sessionId}/chats/${chatId}/unread`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to mark chat as unread: ${errorText}`);
+      }
+      
+      await fetchChats();
+    } catch (error) {
+      throw error;
+    }
+  };
 
   return {
     chats,
@@ -730,6 +869,13 @@ export function useChats() {
     hasMore,
     loadMore,
     page,
-    searchWhatsAppProfile
+    searchWhatsAppProfile,
+    markAsUnread,
+    currentConversation,
+    toggleBotStatus,
+    isUpdatingBot,
+    hasMoreMessages,
+    loadMoreMessages,
+    isFetchingMoreMessages,
   }
 } 

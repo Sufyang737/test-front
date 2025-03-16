@@ -184,23 +184,27 @@ Clerk to PocketBase field mapping:
 
 This project includes a WhatsApp integration using WAHA (WhatsApp HTTP API) that allows users to connect their WhatsApp account and manage it through the dashboard.
 
-### Setup Instructions
+### Session Management
 
-1. Environment Variables
-Add these variables to your `.env.local`:
-```bash
-NEXT_PUBLIC_WAHA_API_URL=your_waha_api_url
-NEXT_PUBLIC_APP_URL=your_app_url
-```
+#### Session Creation and Handling
+- **Single Session Policy**: Only one active session per user is allowed
+- **Session Naming**: Uses client's username as unique session identifier
+- **Automatic Cleanup**: Inactive sessions are automatically deleted before creating new ones
+- **Status Verification**: Sessions are only saved when they are in WORKING state
+- **Phone Number Storage**: Automatically stores the connected WhatsApp phone number
 
-2. PocketBase Configuration
-The WhatsApp integration requires the `clients` collection to have these additional fields:
-- `session_id` (text, optional): Stores the WAHA session ID
-- `phone_client` (number, optional): Stores the connected WhatsApp phone number
+#### Session States
+- `SCAN_QR_CODE`: Initial state, waiting for QR code scan
+- `WORKING`: Session is active and connected
+- `FAILED`: Session creation or connection failed
 
-3. WAHA Setup
-- Install and run WAHA following their documentation
-- Make sure WAHA is accessible at the URL specified in `NEXT_PUBLIC_WAHA_API_URL`
+#### Session Lifecycle
+1. **Verification**: Checks for existing sessions
+   - If active session found: Redirects to dashboard
+   - If inactive session found: Deletes it
+2. **Creation**: Creates new session with user's username
+3. **Connection**: Displays QR code for WhatsApp connection
+4. **Storage**: Only saves session data when connection is successful
 
 ### Features
 

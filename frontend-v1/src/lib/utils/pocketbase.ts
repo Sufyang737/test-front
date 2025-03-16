@@ -8,30 +8,40 @@ export async function getOrCreateClient(userId: string, userData: {
   username?: string 
 }) {
   try {
+    console.log('🔍 Buscando cliente existente con clerk_id:', userId);
+    console.log('📄 Datos de usuario recibidos:', userData);
+
     // Intentar obtener el cliente existente
-    const client = await pb.collection('clients').getFirstListItem(`clerk_id="${userId}"`)
-    return client
-  } catch (error) {
-    // Si el cliente no existe, crearlo
-    if ((error as any)?.status === 404) {
-      // Validar que tengamos los campos requeridos
-      if (!userData.first_name || !userData.last_name) {
-        throw new Error('first_name and last_name are required')
+    try {
+      const client = await pb.collection('clients').getFirstListItem(`clerk_id="${userId}"`)
+      console.log('✅ Cliente existente encontrado:', client);
+      return client;
+    } catch (error) {
+      if ((error as any)?.status !== 404) {
+        console.error('❌ Error inesperado buscando cliente:', error);
+        throw error;
       }
-
-      const data = {
-        first_name: userData.first_name,
-        last_name: userData.last_name,
-        clerk_id: userId,
-        username: userData.username || `user_${userId}`, // Usar un username predecible
-        phone_client: null,
-        session_id: ''
-      }
-
-      const newClient = await pb.collection('clients').create(data)
-      return newClient
+      console.log('ℹ️ Cliente no encontrado, procediendo a crear uno nuevo');
     }
-    throw error
+
+    // Si el cliente no existe, crearlo
+    // Usar valores por defecto si no se proporcionan first_name y last_name
+    const data = {
+      first_name: userData.first_name || 'User',
+      last_name: userData.last_name || userId.slice(0, 8),
+      clerk_id: userId,
+      username: userData.username || `user_${userId}`,
+      phone_client: null,
+      session_id: ''
+    }
+
+    console.log('📝 Creando nuevo cliente con datos:', data);
+    const newClient = await pb.collection('clients').create(data)
+    console.log('✅ Nuevo cliente creado:', newClient);
+    return newClient;
+  } catch (error) {
+    console.error('❌ Error en getOrCreateClient:', error);
+    throw error;
   }
 }
 

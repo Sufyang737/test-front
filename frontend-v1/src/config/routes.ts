@@ -2,10 +2,13 @@ import {
   LayoutDashboard,
   MessageSquare,
   Store,
-  KanbanSquare,
   Settings,
   Building2,
-  BarChart3,
+  HelpCircle,
+  Users,
+  Smartphone,
+  ShoppingBag,
+  FileText
 } from "lucide-react"
 
 interface Route {
@@ -21,53 +24,78 @@ interface RouteSection {
 
 export const routes: RouteSection[] = [
   {
-    section: "Overview",
+    section: "General",
     routes: [
       {
         label: "Dashboard",
         icon: LayoutDashboard,
-        href: "/dashboard/overview",
-      },
-      {
-        label: "Analytics",
-        icon: BarChart3,
         href: "/dashboard",
-      },
+      }
     ],
   },
   {
-    section: "Business",
+    section: "WhatsApp",
     routes: [
-      {
-        label: "Products",
-        icon: Store,
-        href: "/dashboard/products",
-      },
       {
         label: "Chats",
         icon: MessageSquare,
         href: "/dashboard/chats",
       },
       {
-        label: "Kanban",
-        icon: KanbanSquare,
-        href: "/dashboard/kanban",
+        label: "Contactos",
+        icon: Users,
+        href: "/dashboard/contacts",
       },
+      {
+        label: "Dispositivo",
+        icon: Smartphone,
+        href: "/dashboard/device",
+      }
     ],
   },
   {
-    section: "Settings",
+    section: "Negocio",
     routes: [
       {
-        label: "Business Profile",
+        label: "Productos",
+        icon: Store,
+        href: "/dashboard/products",
+      },
+      {
+        label: "Pedidos",
+        icon: ShoppingBag,
+        href: "/dashboard/orders",
+      },
+      {
+        label: "Catálogo",
+        icon: FileText,
+        href: "/dashboard/catalog",
+      }
+    ],
+  },
+  {
+    section: "Configuración",
+    routes: [
+      {
+        label: "Perfil de Empresa",
         icon: Building2,
         href: "/dashboard/business-profile",
       },
       {
-        label: "Settings",
+        label: "Configuración",
         icon: Settings,
-        href: "/dashboard/profile",
-      },
+        href: "/dashboard/settings",
+      }
     ],
   },
+  {
+    section: "Ayuda",
+    routes: [
+      {
+        label: "Centro de Ayuda",
+        icon: HelpCircle,
+        href: "/dashboard/help",
+      }
+    ],
+  }
 ] 

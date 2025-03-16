@@ -11,7 +11,13 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { getCompanyProfile } from '@/lib/utils/pocketbase'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Building2 } from 'lucide-react'
+import { Building2, Settings } from 'lucide-react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface CompanyData {
   name: string;
@@ -29,53 +35,25 @@ export default function Sidebar() {
 
   useEffect(() => {
     async function loadCompanyData() {
-      console.log('🔐 Estado de autenticación:', {
-        isLoaded,
-        isSignedIn,
-        userId
-      });
-
-      if (!isLoaded) {
-        console.log('⏳ Auth todavía no está cargado');
-        return;
-      }
-
-      if (!isSignedIn || !userId) {
-        console.log('❌ Usuario no autenticado o sin userId');
-        return;
-      }
+      if (!isLoaded) return;
+      if (!isSignedIn || !userId) return;
 
       try {
-        console.log('🔄 Iniciando carga de datos para usuario:', userId);
         const data = await getCompanyProfile(userId);
         
-        // Log completo de la respuesta
-        console.log('📦 Respuesta completa:', {
-          data,
-          hasProfile: !!data?.profile,
-          hasClient: !!data?.client,
-          profileData: data?.profile,
-          clientData: data?.client
-        });
-
         if (data?.profile && data?.client) {
-          const newCompanyData = {
+          setCompanyData({
             name: data.profile.name_company,
             description: 'Business Dashboard',
             clientName: `${data.client.first_name} ${data.client.last_name}`
-          };
-          
-          console.log('✅ Actualizando estado con:', newCompanyData);
-          setCompanyData(newCompanyData);
+          });
         } else {
-          console.log('⚠️ No se encontró perfil de empresa');
           setCompanyData({
             name: 'Configura tu Empresa',
             description: 'Click para configurar'
           });
         }
       } catch (error) {
-        console.error('❌ Error completo:', error);
         setCompanyData({
           name: 'Error al cargar',
           description: 'Intenta de nuevo'
@@ -89,23 +67,55 @@ export default function Sidebar() {
   return (
     <div className="w-[240px] flex flex-col fixed inset-y-0 z-50 bg-background">
       <div className="border-r h-[60px] flex items-center px-4">
-        <Link href="/dashboard/business-profile" className="flex items-center gap-2 hover:opacity-80 w-full">
-          <Avatar>
-            <AvatarFallback className="bg-primary/10">
-              {companyData.name === 'Configura tu Empresa' ? (
-                <Building2 className="h-4 w-4" />
-              ) : (
-                companyData.name.charAt(0).toUpperCase()
-              )}
-            </AvatarFallback>
-          </Avatar>
-          <div className="overflow-hidden">
-            <h2 className="text-lg font-semibold leading-none truncate">{companyData.name}</h2>
-            <p className="text-xs text-muted-foreground truncate">
-              {companyData.clientName || companyData.description}
-            </p>
-          </div>
-        </Link>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link 
+                href="/dashboard/business-profile" 
+                className={cn(
+                  "flex items-center gap-2 w-full p-2 rounded-lg transition-colors",
+                  companyData.name === 'Configura tu Empresa' 
+                    ? "hover:bg-primary/10" 
+                    : "hover:opacity-80"
+                )}
+              >
+                <Avatar>
+                  <AvatarFallback 
+                    className={cn(
+                      companyData.name === 'Configura tu Empresa' 
+                        ? "bg-primary/10 text-primary animate-pulse" 
+                        : "bg-primary/10"
+                    )}
+                  >
+                    {companyData.name === 'Configura tu Empresa' ? (
+                      <Building2 className="h-4 w-4" />
+                    ) : (
+                      companyData.name.charAt(0).toUpperCase()
+                    )}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="overflow-hidden flex-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold leading-none truncate">
+                      {companyData.name}
+                    </h2>
+                    {companyData.name === 'Configura tu Empresa' && (
+                      <Settings className="h-4 w-4 text-muted-foreground animate-spin-slow" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {companyData.clientName || companyData.description}
+                  </p>
+                </div>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {companyData.name === 'Configura tu Empresa' 
+                ? "Haz clic para configurar tu empresa"
+                : "Editar perfil de empresa"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
       <ScrollArea className="flex flex-col flex-1 border-r">
         <div className="flex flex-col gap-4 p-2">

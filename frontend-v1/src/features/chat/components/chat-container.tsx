@@ -8,7 +8,18 @@ import { useChats } from '../hooks/use-chats'
 
 export function ChatContainer() {
   const { userId, user } = useAuth()
-  const { chats, activeChat, loading, error, messages, sendMessage, selectChat } = useChats()
+  const { 
+    chats, 
+    activeChat, 
+    loading, 
+    error, 
+    messages, 
+    sendMessage, 
+    selectChat,
+    currentConversation,
+    toggleBotStatus,
+    isUpdatingBot
+  } = useChats()
   const [showDetails, setShowDetails] = useState(false)
   const isSupport = user?.publicMetadata?.role === 'support'
 
@@ -44,7 +55,13 @@ export function ChatContainer() {
               <ChatMessages messages={messages} />
             </div>
             <div className="p-4 border-t bg-white">
-              <ChatInput onSendMessage={sendMessage} />
+              <ChatInput 
+                onSend={sendMessage}
+                disabled={loading}
+                currentConversation={currentConversation}
+                onToggleBot={toggleBotStatus}
+                isUpdatingBot={isUpdatingBot}
+              />
             </div>
           </>
         ) : (

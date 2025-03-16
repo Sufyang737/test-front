@@ -1,8 +1,20 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
+import PocketBase from 'pocketbase'
 
 const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL
-const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090'
+const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL
+const POCKETBASE_TOKEN_ADMIN = process.env.POCKETBASE_TOKEN_ADMIN || ''
+
+if (!POCKETBASE_URL) {
+  throw new Error('NEXT_PUBLIC_POCKETBASE_URL no está configurado')
+}
+
+if (!POCKETBASE_TOKEN_ADMIN) {
+  throw new Error('POCKETBASE_TOKEN_ADMIN no está configurado')
+}
+
+const pb = new PocketBase(POCKETBASE_URL)
 
 export async function GET() {
   try {
@@ -13,93 +25,84 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const sessionName = user.username || 
-                       user.emailAddresses[0]?.emailAddress?.split('@')[0] || 
-                       `user_${session.userId}`
+    // Autenticar con PocketBase usando el token de admin
+    pb.authStore.save(POCKETBASE_TOKEN_ADMIN)
+    console.log('✅ Token de admin guardado')
 
-    console.log('Checking WAHA session status for:', sessionName)
+    // Buscar el cliente por clerk_id
+    console.log('🔍 Buscando cliente con clerk_id:', session.userId)
+    try {
+      const clientsResponse = await pb.collection('clients').getFirstListItem(`clerk_id = "${session.userId}"`)
+      console.log('✅ Cliente encontrado:', clientsResponse)
 
-    // Obtener la información de la sesión directamente
-    const sessionResponse = await fetch(`${WAHA_API_URL}/api/sessions/${sessionName}`)
-    const sessionData = await sessionResponse.json()
-    console.log('Session data:', sessionData)
+      // Si encontramos el cliente, verificar la sesión de WhatsApp
+      const sessionName = user.username || 
+                         user.emailAddresses[0]?.emailAddress?.split('@')[0] || 
+                         `user_${session.userId}`
 
-    if (!sessionResponse.ok) {
-      return NextResponse.json({ status: 'DISCONNECTED' })
-    }
+      console.log('Checking WAHA session status for:', sessionName)
+      const sessionResponse = await fetch(`${WAHA_API_URL}/api/sessions/${sessionName}`)
+      const sessionData = await sessionResponse.json()
+      console.log('Session data:', sessionData)
 
-    // Si la sesión está conectada (verificando el estado del engine)
-    if (sessionData.engine?.state === 'CONNECTED') {
-      const phoneNumber = sessionData.me.id.replace('@c.us', '')
-      console.log('Phone number:', phoneNumber)
-
-      // Buscar el cliente por su clerk_id
-      console.log('Updating PocketBase for clerk_id:', session.userId)
-      const clientsResponse = await fetch(`${POCKETBASE_URL}/api/collections/clients/records?filter=(clerk_id='${session.userId}')`)
-      
-      if (!clientsResponse.ok) {
-        console.error('Failed to fetch client:', await clientsResponse.text())
-        return NextResponse.json({
-          status: 'CONNECTED',
-          phone: phoneNumber,
-          error: 'Failed to fetch client'
-        })
+      if (!sessionResponse.ok) {
+        return NextResponse.json({ status: 'DISCONNECTED' })
       }
 
-      const clientsData = await clientsResponse.json()
-      console.log('Found clients:', clientsData)
-      
-      if (clientsData.items && clientsData.items.length > 0) {
-        const client = clientsData.items[0]
-        
-        // Actualizar el cliente con el session_id (solo el name) y phone_client
-        const updateResponse = await fetch(`${POCKETBASE_URL}/api/collections/clients/records/${client.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
+      // Si la sesión está conectada
+      if (sessionData.engine?.state === 'CONNECTED') {
+        const phoneNumber = sessionData.me.id.replace('@c.us', '')
+        console.log('Phone number:', phoneNumber)
+
+        // Actualizar el cliente con el session_id y phone_client
+        try {
+          const updatedClient = await pb.collection('clients').update(clientsResponse.id, {
             session_id: sessionData.name,
             phone_client: phoneNumber
           })
-        })
 
-        const updateResult = await updateResponse.text()
-        console.log('PocketBase update result:', updateResult)
-
-        if (!updateResponse.ok) {
+          console.log('✅ Cliente actualizado:', updatedClient)
+          return NextResponse.json({
+            status: 'CONNECTED',
+            phone: phoneNumber,
+            clientUpdated: true,
+            session_id: sessionData.name,
+            client: updatedClient
+          })
+        } catch (error) {
+          console.error('❌ Error actualizando cliente:', error)
           return NextResponse.json({
             status: 'CONNECTED',
             phone: phoneNumber,
             error: 'Failed to update client',
-            details: updateResult
+            details: error instanceof Error ? error.message : 'Unknown error'
           })
         }
-
-        return NextResponse.json({
-          status: 'CONNECTED',
-          phone: phoneNumber,
-          clientUpdated: true,
-          session_id: sessionData.name
-        })
       }
 
-      return NextResponse.json({
-        status: 'CONNECTED',
-        phone: phoneNumber,
-        error: 'No client found to update'
+      // Si la sesión existe pero no está conectada
+      return NextResponse.json({ 
+        status: sessionData.status || 'DISCONNECTED',
+        sessionFound: true,
+        session_id: sessionData.name,
+        client: clientsResponse
       })
+
+    } catch (error) {
+      console.error('❌ Error buscando cliente:', error)
+      // Si el error es que no se encontró el cliente
+      if (error.status === 404) {
+        return NextResponse.json({
+          status: 'ERROR',
+          error: 'No client found',
+          clerk_id: session.userId
+        })
+      }
+      throw error
     }
 
-    // Si la sesión existe pero no está conectada
-    return NextResponse.json({ 
-      status: sessionData.status || 'DISCONNECTED',
-      sessionFound: true,
-      session_id: sessionData.name
-    })
-
   } catch (error) {
-    console.error('Error checking status:', error)
+    console.error('Error general:', error)
     return NextResponse.json({ 
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'

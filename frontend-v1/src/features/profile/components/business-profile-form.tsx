@@ -19,7 +19,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { TimePicker } from "@/components/ui/time-picker"
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
-import { toast } from "sonner"
 import { Loader2, CheckCircle2 } from "lucide-react"
 import { createBusinessProfile, getBusinessProfile } from "@/lib/pocketbase"
 import { useAuth } from "@clerk/nextjs"
@@ -30,6 +29,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/components/ui/use-toast"
 
 interface BusinessHours {
   open: string
@@ -41,8 +42,24 @@ interface DaysConfig {
   [key: string]: BusinessHours
 }
 
-export function BusinessProfileForm() {
+interface BusinessProfileFormProps {
+  onboardingMode?: boolean;
+}
+
+const daysTranslations: { [key: string]: string } = {
+  monday: "Lunes",
+  tuesday: "Martes",
+  wednesday: "Miércoles",
+  thursday: "Jueves",
+  friday: "Viernes",
+  saturday: "Sábado",
+  sunday: "Domingo",
+}
+
+export function BusinessProfileForm({ onboardingMode = false }: BusinessProfileFormProps) {
+  const router = useRouter();
   const { userId } = useAuth();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [businessDays, setBusinessDays] = useState<DaysConfig>({
@@ -52,23 +69,19 @@ export function BusinessProfileForm() {
     thursday: { open: "09:00", close: "18:00", enabled: true },
     friday: { open: "09:00", close: "18:00", enabled: true },
     saturday: { open: "09:00", close: "14:00", enabled: true },
-    sunday: { open: "09:00", close: "14:00", enabled: false },
+    sunday: { open: "09:00", close: "14:00", enabled: false }
   })
 
-  const form = useForm({
+  const form = useForm<BusinessProfileFormValues>({
     resolver: zodResolver(businessProfileSchema),
     defaultValues: {
-      businessName: "",
+      name_company: "",
       description: "",
-      address: "",
-      phone: "",
-      email: "",
+      opening_hours: "",
+      instagram: "",
+      facebook: "",
       website: "",
-      socialMedia: {
-        facebook: "",
-        instagram: "",
-        twitter: "",
-      },
+      x: "",
     },
   })
 
@@ -98,18 +111,22 @@ export function BusinessProfileForm() {
 
           // Set form values
           form.reset({
-            businessName: profile.name_company,
+            name_company: profile.name_company,
             description: profile.description,
+            opening_hours: profile.opening_hours,
+            instagram: profile.instagram || "",
+            facebook: profile.facebook || "",
             website: profile.website || "",
-            socialMedia: {
-              facebook: profile.facebook || "",
-              instagram: profile.instagram || "",
-              twitter: profile.x || "",
-            },
+            x: profile.x || "",
           });
         }
       } catch (error) {
         console.error('Error loading profile:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo cargar el perfil existente"
+        });
       } finally {
         setIsLoading(false);
       }
@@ -118,69 +135,53 @@ export function BusinessProfileForm() {
     loadExistingProfile();
   }, [userId, form]);
 
-  const onSubmit = async (data: any) => {
-    setIsLoading(true)
+  const formatBusinessHours = () => {
+    return Object.entries(businessDays)
+      .map(([day, hours]) => {
+        const translatedDay = daysTranslations[day];
+        return `${translatedDay}: ${hours.enabled ? `${hours.open} - ${hours.close}` : 'Closed'}`;
+      })
+      .join('; ');
+  };
+
+  const onSubmit = async (data: BusinessProfileFormValues) => {
     try {
-      if (!userId) {
-        throw new Error("Usuario no autenticado");
-      }
-
-      console.log('Form data:', JSON.stringify(data, null, 2));
-      console.log('User ID:', userId);
-
-      // Format business hours into a string
-      const formattedHours = Object.entries(businessDays)
-        .map(([day, hours]) => {
-          if (!hours.enabled) return `${day}: Closed`;
-          return `${day}: ${hours.open} - ${hours.close}`;
-        })
-        .join('; ');
-
-      console.log('Formatted hours:', formattedHours);
-
-      // Validate required fields
-      if (!data.businessName) {
-        throw new Error("El nombre de la empresa es requerido");
-      }
-      if (!data.description) {
-        throw new Error("La descripción es requerida");
-      }
-
-      const profileData = {
-        client_id: userId,
-        name_company: data.businessName.trim(),
-        description: data.description.trim(),
-        website: (data.website || "").trim(),
-        instagram: (data.socialMedia?.instagram || "").trim(),
-        facebook: (data.socialMedia?.facebook || "").trim(),
-        x: (data.socialMedia?.twitter || "").trim(),
-        opening_hours: formattedHours,
-      };
-
-      console.log('Profile data to send:', JSON.stringify(profileData, null, 2));
-
-      const result = await createBusinessProfile(profileData);
+      setIsLoading(true);
       
-      if (result.success) {
-        setShowSuccessDialog(true);
-      } else {
-        console.error('Error details:', result.error);
-        throw new Error(result.error || "Error al crear el perfil");
-      }
-    } catch (error: any) {
-      console.error('Form submission error:', error);
-      toast.error(error.message || "Error al actualizar el perfil");
-    } finally {
-      setIsLoading(false)
-    }
-  }
+      // Format business hours before sending
+      const formattedHours = formatBusinessHours();
+      
+      const response = await createBusinessProfile({
+        ...data,
+        opening_hours: formattedHours,
+        client_id: userId!,
+      });
 
-  // Verificar autenticación al cargar el componente
-  useEffect(() => {
-    if (!userId) {
-      toast.error("Debes iniciar sesión para crear un perfil");
+      if (response.success) {
+        toast({
+          title: onboardingMode ? "¡Configuración completada!" : "Perfil actualizado",
+          description: onboardingMode 
+            ? "Tu empresa ha sido configurada correctamente. Redirigiendo al dashboard..." 
+            : "Los datos de tu empresa han sido actualizados",
+        });
+
+        if (onboardingMode) {
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 1500);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating business profile:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al guardar los datos",
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, [userId]);
+  };
 
   const handleBusinessHourChange = (
     day: string,
@@ -194,6 +195,10 @@ export function BusinessProfileForm() {
         [field]: value,
       },
     }))
+
+    // Update the opening_hours field in the form
+    const formattedHours = formatBusinessHours();
+    form.setValue("opening_hours", formattedHours);
   }
 
   return (
@@ -209,54 +214,20 @@ export function BusinessProfileForm() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                {/* Información Básica */}
-                <div className="space-y-6">
-                  <h3 className="text-lg font-medium">Información Básica</h3>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="businessName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nombre de la Empresa</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Mi Empresa S.A." {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Teléfono</FormLabel>
-                          <FormControl>
-                            <Input placeholder="+1234567890" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
+                <div className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="description"
+                    name="name_company"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Descripción</FormLabel>
+                        <FormLabel className="text-gray-200">Nombre de la Empresa</FormLabel>
                         <FormControl>
-                          <Textarea
-                            placeholder="Describe tu empresa..."
-                            className="resize-none"
-                            {...field}
+                          <Input 
+                            placeholder="Tu empresa" 
+                            {...field} 
+                            className="bg-white/5 border-white/10 text-white placeholder:text-gray-400"
                           />
                         </FormControl>
-                        <FormDescription>
-                          Esta descripción aparecerá en tu perfil público
-                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -264,12 +235,16 @@ export function BusinessProfileForm() {
 
                   <FormField
                     control={form.control}
-                    name="address"
+                    name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Dirección</FormLabel>
+                        <FormLabel className="text-gray-200">Descripción</FormLabel>
                         <FormControl>
-                          <Input placeholder="Calle Principal #123" {...field} />
+                          <Textarea
+                            placeholder="Describe tu empresa"
+                            className="bg-white/5 border-white/10 text-white placeholder:text-gray-400 min-h-[100px]"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -277,18 +252,74 @@ export function BusinessProfileForm() {
                   />
                 </div>
 
-                {/* Contacto y Web */}
+                <div className="space-y-4">
+                  <FormLabel className="text-gray-200">Horario de Atención</FormLabel>
+                  <Card className="border-0 bg-white/5">
+                    <CardContent className="p-6 space-y-4">
+                      {Object.entries(daysTranslations).map(([day, label]) => (
+                        <div key={day} className="grid grid-cols-[1fr,2fr,2fr,80px] gap-4 items-center">
+                          <div className="font-medium text-gray-200">{label}</div>
+                          <div className="flex items-center gap-2">
+                            <TimePicker
+                              value={businessDays[day].open}
+                              onChange={(value) => handleBusinessHourChange(day, "open", value)}
+                              disabled={!businessDays[day].enabled}
+                              className="bg-white/5 border-white/10 text-white"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <TimePicker
+                              value={businessDays[day].close}
+                              onChange={(value) => handleBusinessHourChange(day, "close", value)}
+                              disabled={!businessDays[day].enabled}
+                              className="bg-white/5 border-white/10 text-white"
+                            />
+                          </div>
+                          <Switch
+                            checked={businessDays[day].enabled}
+                            onCheckedChange={(checked) =>
+                              handleBusinessHourChange(day, "enabled", checked)
+                            }
+                            className="data-[state=checked]:bg-blue-500"
+                          />
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+
                 <div className="space-y-6">
-                  <h3 className="text-lg font-medium">Contacto y Web</h3>
+                  <FormLabel className="text-gray-200">Redes Sociales</FormLabel>
                   <div className="grid gap-6 md:grid-cols-2">
                     <FormField
                       control={form.control}
-                      name="email"
+                      name="instagram"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel className="text-gray-300">Instagram</FormLabel>
                           <FormControl>
-                            <Input placeholder="contacto@miempresa.com" {...field} />
+                            <Input 
+                              placeholder="@tuempresa" 
+                              {...field}
+                              className="bg-white/5 border-white/10 text-white placeholder:text-gray-400" 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="facebook"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-gray-300">Facebook</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="facebook.com/tuempresa" 
+                              {...field}
+                              className="bg-white/5 border-white/10 text-white placeholder:text-gray-400"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -299,9 +330,30 @@ export function BusinessProfileForm() {
                       name="website"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Sitio Web</FormLabel>
+                          <FormLabel className="text-gray-300">Sitio Web</FormLabel>
                           <FormControl>
-                            <Input placeholder="https://miempresa.com" {...field} />
+                            <Input 
+                              placeholder="www.tuempresa.com" 
+                              {...field}
+                              className="bg-white/5 border-white/10 text-white placeholder:text-gray-400"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="x"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-gray-300">X (Twitter)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="@tuempresa" 
+                              {...field}
+                              className="bg-white/5 border-white/10 text-white placeholder:text-gray-400"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -310,97 +362,18 @@ export function BusinessProfileForm() {
                   </div>
                 </div>
 
-                {/* Redes Sociales */}
-                <div className="space-y-6">
-                  <h3 className="text-lg font-medium">Redes Sociales</h3>
-                  <div className="grid gap-6 md:grid-cols-3">
-                    <FormField
-                      control={form.control}
-                      name="socialMedia.facebook"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Facebook</FormLabel>
-                          <FormControl>
-                            <Input placeholder="@miempresa" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="socialMedia.instagram"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Instagram</FormLabel>
-                          <FormControl>
-                            <Input placeholder="@miempresa" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="socialMedia.twitter"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Twitter</FormLabel>
-                          <FormControl>
-                            <Input placeholder="@miempresa" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* Horario de Atención */}
-                <div className="space-y-6">
-                  <h3 className="text-lg font-medium">Horario de Atención</h3>
-                  <div className="space-y-4">
-                    {Object.entries(businessDays).map(([day, hours]) => (
-                      <div key={day} className="flex items-center gap-6">
-                        <div className="w-32">
-                          <Switch
-                            checked={hours.enabled}
-                            onCheckedChange={(checked) =>
-                              handleBusinessHourChange(day, "enabled", checked)
-                            }
-                          />
-                          <span className="ml-2 capitalize">{day}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <TimePicker
-                            value={hours.open}
-                            onChange={(value) =>
-                              handleBusinessHourChange(day, "open", value)
-                            }
-                            disabled={!hours.enabled}
-                          />
-                          <span>a</span>
-                          <TimePicker
-                            value={hours.close}
-                            onChange={(value) =>
-                              handleBusinessHourChange(day, "close", value)
-                            }
-                            disabled={!hours.enabled}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02]" 
+                  disabled={isLoading}
+                >
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Guardando...
+                      {onboardingMode ? "Completando configuración..." : "Guardando cambios..."}
                     </>
                   ) : (
-                    "Guardar Cambios"
+                    onboardingMode ? "Completar Configuración" : "Guardar Cambios"
                   )}
                 </Button>
               </form>

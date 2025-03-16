@@ -4,6 +4,7 @@ import PocketBase from 'pocketbase';
 import OverviewPage from "@/features/overview/components/overview";
 
 const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL);
+const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL;
 
 export default async function DashboardPage() {
   const { userId } = await auth();
@@ -14,26 +15,56 @@ export default async function DashboardPage() {
   }
 
   try {
-    // Check if user has completed onboarding
+    // Buscar el cliente
     const records = await pb.collection('clients').getList(1, 1, {
-      filter: `clerk_id = "${userId}" && session_id != ""`,
+      filter: `clerk_id = "${userId}"`,
     });
 
-    // If user hasn't completed onboarding (no session_id), redirect to onboarding
-    if (records.items.length === 0 || !records.items[0].session_id) {
+    // Si no hay cliente, redirigir a onboarding
+    if (records.items.length === 0) {
       redirect('/dashboard/onboarding');
     }
-  } catch (error) {
-    console.error('Error checking onboarding status:', error);
-    // If there's an error, assume user needs onboarding
-    redirect('/dashboard/onboarding');
-  }
 
-  return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="w-full">
-        <OverviewPage />
+    const client = records.items[0];
+
+    // Si no hay session_id, redirigir a onboarding
+    if (!client.session_id) {
+      redirect('/dashboard/onboarding');
+    }
+
+    // Verificar estado de la sesión
+    try {
+      const sessionResponse = await fetch(`${WAHA_API_URL}/api/sessions/${client.session_id}`);
+      const sessionData = await sessionResponse.json();
+
+      // Si la sesión no está activa, redirigir a onboarding
+      if (!sessionData.status || (sessionData.status !== 'WORKING' && sessionData.engine?.state !== 'CONNECTED')) {
+        redirect('/dashboard/onboarding');
+      }
+    } catch (error) {
+      console.error('Error verificando estado de sesión:', error);
+      // Si hay error al verificar la sesión, mostramos el dashboard de todos modos
+      // para evitar un bucle de redirección
+    }
+
+    // Si llegamos aquí, mostramos el dashboard
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="w-full">
+          <OverviewPage />
+        </div>
       </div>
-    </div>
-  );
+    );
+
+  } catch (error) {
+    console.error('Error general:', error);
+    // Si hay un error general, mostramos el dashboard en lugar de redirigir
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="w-full">
+          <OverviewPage />
+        </div>
+      </div>
+    );
+  }
 }

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Send, Smile, FileText } from 'lucide-react'
+import { Loader2, Send, Smile, FileText, Bot } from 'lucide-react'
 import data from '@emoji-mart/data'
 import Picker from '@emoji-mart/react'
 import {
@@ -21,28 +21,38 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { ClipboardIcon } from '@radix-ui/react-icons'
 
 interface ChatInputProps {
-  onSend: (message: string) => Promise<void>
+  onSendMessage: (content: string, file?: File) => Promise<void>
   disabled?: boolean
   loading?: boolean
+  botEnabled?: boolean
 }
 
-export function ChatInput({ onSend, disabled, loading }: ChatInputProps) {
+export function ChatInput({ 
+  onSendMessage, 
+  disabled, 
+  loading,
+  botEnabled = false
+}: ChatInputProps) {
   const [message, setMessage] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null)
   const [variables, setVariables] = useState<Record<string, string>>({})
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { templates, loading: loadingTemplates } = useTemplates()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!message.trim() || loading) return
+  const handleSendMessage = async () => {
+    if (!message.trim() && !file) return
+    if (loading) return
 
     try {
-      await onSend(message)
+      await onSendMessage(message.trim(), file || undefined)
       setMessage('')
+      setFile(null)
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto'
       }
@@ -54,8 +64,19 @@ export function ChatInput({ onSend, disabled, loading }: ChatInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSubmit(e)
+      handleSendMessage()
     }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0]
+    if (selectedFile) {
+      setFile(selectedFile)
+    }
+  }
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click()
   }
 
   const insertEmoji = (emoji: any) => {
@@ -88,77 +109,114 @@ export function ChatInput({ onSend, disabled, loading }: ChatInputProps) {
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`
     }
   }, [message])
 
   return (
-    <>
-      <form onSubmit={handleSubmit} className="flex items-end gap-2">
-        <div className="flex-1 flex">
-          <div className="flex-1 relative">
-            <Textarea
-              ref={textareaRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
-              disabled={disabled || loading}
-              className="min-h-[44px] max-h-[200px] py-3 pr-12 resize-none"
-              rows={1}
-            />
-            <div className="absolute right-2 bottom-2 flex items-center gap-1">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    disabled={disabled || loading}
-                  >
-                    <Smile className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  side="top"
-                  align="end"
-                  className="w-auto p-0 bg-transparent border-none"
-                >
-                  <Picker
-                    data={data}
-                    onEmojiSelect={insertEmoji}
-                    theme="light"
-                  />
-                </PopoverContent>
-              </Popover>
+    <div className="p-4 bg-background border-t">
+      <div className="flex items-end gap-2 max-w-4xl mx-auto">
+        {/* Botón de adjuntar archivo */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          onClick={handleAttachClick}
+          disabled={disabled || loading || botEnabled}
+        >
+          <ClipboardIcon className="h-5 w-5" />
+        </Button>
 
+        {/* Emoji picker */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              disabled={disabled || loading || botEnabled}
+            >
+              <Smile className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            className="w-auto p-0 bg-transparent border-none"
+          >
+            <Picker
+              data={data}
+              onEmojiSelect={insertEmoji}
+              theme="light"
+            />
+          </PopoverContent>
+        </Popover>
+
+        {/* Input oculto para archivos */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          onChange={handleFileChange}
+          accept="image/*,video/*,audio/*,application/pdf"
+        />
+
+        {/* Área de texto */}
+        <div className="flex-1 relative">
+          <Textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={botEnabled ? "Chat bloqueado - Bot activo" : "Escribe un mensaje..."}
+            disabled={disabled || loading || botEnabled}
+            className={cn(
+              "min-h-[40px] max-h-[150px] py-2.5 pr-12 resize-none",
+              "scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
+            )}
+          />
+
+          {/* Archivo adjunto */}
+          {file && (
+            <div className="absolute -top-8 left-0 right-12 bg-background border rounded-lg p-2 text-sm flex items-center justify-between">
+              <span className="truncate">{file.name}</span>
               <Button
-                type="button"
                 variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                disabled={disabled || loading}
-                onClick={() => setShowTemplates(true)}
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setFile(null)}
               >
-                <FileText className="h-4 w-4" />
+                ×
               </Button>
             </div>
-          </div>
+          )}
+
+          {/* Templates button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 bottom-2 h-6 w-6"
+            onClick={() => setShowTemplates(true)}
+            disabled={disabled || loading || botEnabled}
+          >
+            <FileText className="h-4 w-4" />
+          </Button>
         </div>
 
-        <Button 
-          type="submit" 
-          size="icon" 
-          disabled={disabled || loading || !message.trim()}
+        {/* Botón de enviar */}
+        <Button
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          onClick={handleSendMessage}
+          disabled={disabled || loading || (!message.trim() && !file) || botEnabled}
         >
           {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
-            <Send className="h-4 w-4" />
+            <Send className="h-5 w-5" />
           )}
         </Button>
-      </form>
+      </div>
 
       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
         <DialogContent className="max-w-3xl">
@@ -258,6 +316,6 @@ export function ChatInput({ onSend, disabled, loading }: ChatInputProps) {
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   )
 } 

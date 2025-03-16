@@ -1,78 +1,68 @@
 import { NextResponse } from 'next/server'
-import PocketBase from 'pocketbase'
+import type { NextRequest } from 'next/server'
 
-const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL)
-
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
+  console.log('🎯 WEBHOOK RECIBIDO - INICIO DEL PROCESO')
+  
   try {
-    const body = await req.json()
-    const { event, payload, session } = body
+    // Log de headers
+    const headers = Object.fromEntries(request.headers.entries())
+    console.log('📋 Headers recibidos:', JSON.stringify(headers, null, 2))
 
-    console.log('Webhook received:', { event, session })
+    // Log del body completo
+    const data = await request.json()
+    console.log('📦 Body completo recibido:', JSON.stringify(data, null, 2))
 
-    // Handle different webhook events
-    switch (event) {
-      case 'message':
-      case 'message.any':
-        // Store message in PocketBase
-        await pb.collection('messages').create({
-          message_id: payload.id,
-          chat_id: payload.to,
-          content: payload.body,
-          timestamp: new Date(payload.timestamp * 1000).toISOString(),
-          from_me: payload.fromMe,
-          sender: payload.fromMe ? 'me' : payload.from,
-          status: 'sent'
-        })
-        break
-
-      case 'message.ack':
-        // Update message status in PocketBase
-        const messages = await pb.collection('messages').getList(1, 1, {
-          filter: `message_id = "${payload.id}"`
-        })
-        
-        if (messages.items.length > 0) {
-          await pb.collection('messages').update(messages.items[0].id, {
-            status: getStatusFromAck(payload.ack)
-          })
-        }
-        break
-
-      case 'presence.update':
-        // Update presence status in conversation
-        const conversations = await pb.collection('conversation').getList(1, 1, {
-          filter: `chat_id = "${payload.id}"`
-        })
-
-        if (conversations.items.length > 0) {
-          await pb.collection('conversation').update(conversations.items[0].id, {
-            last_presence: payload.status,
-            last_presence_timestamp: new Date().toISOString()
-          })
-        }
-        break
+    // Extraer datos relevantes
+    const session = String(data.session)
+    const payload = data.payload
+    
+    console.log('🔍 Datos extraídos:')
+    console.log('- Session:', session)
+    console.log('- Payload:', JSON.stringify(payload, null, 2))
+    
+    if (!payload) {
+      console.error('❌ ERROR: Payload inválido')
+      console.error('Data recibida:', JSON.stringify(data, null, 2))
+      return NextResponse.json({ error: 'Payload inválido' }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Webhook error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-}
+    // Extraer y limpiar el número de teléfono
+    const fromUser = String(payload.from).split('@')[0]
+    
+    // Extraer otros campos
+    const incomingMsg = String(payload.body)
+    const timestamp = String(payload.timestamp)
+    const notifyName = String(payload._data?.notifyName || '')
+    
+    console.log('✅ Datos procesados:')
+    console.log({
+      session,
+      fromUser,
+      incomingMsg,
+      timestamp,
+      notifyName,
+      rawPayload: payload
+    })
 
-function getStatusFromAck(ack: number): 'sent' | 'delivered' | 'read' {
-  switch (ack) {
-    case 1:
-      return 'sent'
-    case 2:
-      return 'delivered'
-    case 3:
-      return 'read'
-    default:
-      return 'sent'
+    // Emitir evento para el WebSocket
+    const wsMessage = {
+      event: 'message.new',
+      session,
+      payload: {
+        ...payload,
+        notifyName
+      }
+    }
+    
+    console.log('📤 Mensaje WebSocket preparado:', JSON.stringify(wsMessage, null, 2))
+    console.log('🎯 WEBHOOK PROCESADO CORRECTAMENTE')
+
+    return NextResponse.json({ status: 'OK' })
+
+  } catch (error) {
+    console.error('❌ ERROR EN WEBHOOK:', error)
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace available')
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 } 

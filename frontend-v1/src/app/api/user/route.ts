@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
-import PocketBase from 'pocketbase'
-
-const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL || '')
+import { authPocketBase, getClientByClerkId, createClient } from '@/lib/pocketbase'
 
 export async function GET() {
   try {
@@ -13,32 +11,21 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Intentar autenticar con PocketBase primero
     try {
       const token = await session.getToken()
       if (!token) {
         throw new Error('No token available')
       }
+
+      // Autenticar con PocketBase
+      await authPocketBase(token)
       
-      pb.authStore.save(token, null)
+      // Buscar cliente existente
+      let client = await getClientByClerkId(session.userId)
       
-      // Verificar si el cliente existe
-      const existingClient = await pb.collection('clients').getFirstListItem(`clerk_id = "${session.userId}"`)
-      
-      return NextResponse.json({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        username: user.username,
-        email: user.emailAddresses[0]?.emailAddress,
-        userId: session.userId,
-        clientId: existingClient.id,
-        token
-      })
-      
-    } catch (pbError: any) { // Using any here because PocketBase error type is not well defined
-      // Si el cliente no existe, lo creamos
-      if (pbError.status === 404) {
-        const newClient = await pb.collection('clients').create({
+      // Si no existe, crear uno nuevo
+      if (!client) {
+        client = await createClient({
           first_name: user.firstName || 'User',
           last_name: user.lastName || session.userId,
           clerk_id: session.userId,
@@ -48,24 +35,21 @@ export async function GET() {
           created: new Date().toISOString(),
           updated: new Date().toISOString()
         })
-        
-        const token = await session.getToken()
-        if (!token) {
-          throw new Error('No token available after client creation')
-        }
-        
-        return NextResponse.json({
-          firstName: user.firstName,
-          lastName: user.lastName,
-          username: user.username,
-          email: user.emailAddresses[0]?.emailAddress,
-          userId: session.userId,
-          clientId: newClient.id,
-          token
-        })
       }
-      
-      throw pbError
+
+      return NextResponse.json({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.emailAddresses[0]?.emailAddress,
+        userId: session.userId,
+        clientId: client.id,
+        token
+      })
+
+    } catch (error) {
+      console.error('Error processing request:', error)
+      throw error
     }
 
   } catch (error) {

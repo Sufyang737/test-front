@@ -8,9 +8,8 @@ import { CheckCircle, Loader2, AlertCircle, RefreshCcw } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import PocketBase from 'pocketbase'
+import { getPocketBase, authPocketBase, getClientByClerkId, updateClient, getAllClients } from '@/lib/pocketbase'
 
-const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL)
 const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL
 
 export function WhatsAppQR() {
@@ -27,37 +26,9 @@ export function WhatsAppQR() {
   const router = useRouter()
   const { userId, isLoaded, isSignedIn, getToken } = useAuth()
 
-  // Autenticar PocketBase con el token de Clerk
-  const authPocketBase = async () => {
-    try {
-      const token = await getToken();
-      if (!token) {
-        console.error('❌ No se pudo obtener el token de Clerk');
-        throw new Error('No auth token available');
-      }
-      
-      console.log('🔑 Token obtenido, autenticando con PocketBase...');
-      pb.authStore.save(token, null);
-      
-      // Verificar que la autenticación fue exitosa
-      if (!pb.authStore.isValid) {
-        console.error('❌ Token no válido para PocketBase');
-        throw new Error('Invalid PocketBase authentication');
-      }
-      
-      console.log('✅ Autenticación con PocketBase exitosa');
-      return true;
-    } catch (error) {
-      console.error('❌ Error en autenticación:', error);
-      throw error;
-    }
-  };
-
-  // Buscar el cliente en PocketBase
   const findClient = async () => {
     try {
-      console.log('🔍 Buscando cliente...')
-      console.log('Auth status:', { isLoaded, isSignedIn, userId })
+      console.log('🔍 Iniciando búsqueda de cliente...')
 
       if (!isLoaded) {
         console.log('⏳ Clerk todavía no está listo')
@@ -70,45 +41,37 @@ export function WhatsAppQR() {
         return false
       }
 
-      await authPocketBase();
-
-      const records = await pb.collection('clients').getList(1, 1, {
-        filter: `clerk_id = "${userId}"`
-      })
-      
-      console.log('📄 Resultado completo de la búsqueda:', {
-        totalItems: records.totalItems,
-        page: records.page,
-        perPage: records.perPage,
-        items: records.items,
-        filter: `clerk_id = "${userId}"`
-      })
-      
-      if (records.items.length > 0) {
-        const client = records.items[0]
-        console.log('👤 Cliente encontrado:', client)
-        setClientId(client.id)
-        
-        // Si ya tiene una sesión activa, verificar en WAHA
-        if (client.session_id) {
-          try {
-            const wahaResponse = await fetch(`${WAHA_API_URL}/api/sessions/${client.session_id}`);
-            if (wahaResponse.ok) {
-              const wahaData = await wahaResponse.json();
-              if (wahaData.status === 'WORKING' || wahaData.engine?.state === 'CONNECTED') {
-                console.log('✅ Cliente ya tiene sesión activa y funcionando')
-                setStatus('WORKING')
-                setPhone(client.phone_client?.toString() || null)
-                router.push('/dashboard')
-                return true
-              }
-            }
-          } catch (error) {
-            console.log('Error verificando sesión en WAHA:', error)
-          }
-        }
+      const response = await fetch('/api/whatsapp/status')
+      if (!response.ok) {
+        throw new Error('Error obteniendo estado')
       }
+
+      const data = await response.json()
+      console.log('📊 Estado actual:', data)
+
+      if (data.error) {
+        console.error('❌ Error del servidor:', data.error)
+        return false
+      }
+
+      if (data.status === 'CONNECTED' && data.client) {
+        console.log('✅ Cliente encontrado y WhatsApp conectado')
+        setClientId(data.client.id)
+        setStatus('WORKING')
+        setPhone(data.phone)
+        router.push('/dashboard')
+        return true
+      }
+
+      if (data.client) {
+        console.log('✅ Cliente encontrado:', data.client)
+        setClientId(data.client.id)
+        return true
+      }
+
+      console.log('❌ No se encontró el cliente')
       return false
+
     } catch (error) {
       console.error('❌ Error buscando cliente:', error)
       return false
@@ -119,35 +82,62 @@ export function WhatsAppQR() {
 
   const createSession = async () => {
     try {
-      console.log('🔧 Creando sesión...')
-      const response = await fetch('/api/whatsapp/session', {
-        method: 'POST'
-      })
+      console.log('🔍 Verificando sesión existente...');
+      const statusResponse = await fetch('/api/whatsapp/status');
+      const statusData = await statusResponse.json();
 
-      if (!response.ok) {
-        throw new Error('Failed to create session')
+      // Si encontramos una sesión existente y WORKING, la usamos
+      if (statusData.sessionFound && statusData.status === 'WORKING' && statusData.client?.username) {
+        console.log('✅ Sesión activa encontrada:', statusData.client.username);
+        setSessionName(statusData.client.username);
+        setStatus('WORKING');
+        router.push('/dashboard');
+        return;
       }
 
-      const data = await response.json()
-      console.log('✨ Sesión creada (data completa):', data)
-      console.log('✨ session.name:', data.name)
-      console.log('✨ session.session:', data.session)
-      console.log('✨ session completo:', JSON.stringify(data, null, 2))
+      // Si hay una sesión existente pero no está WORKING, la eliminamos
+      if (statusData.sessionFound && statusData.client?.username) {
+        console.log('🗑️ Eliminando sesión no activa:', statusData.client.username);
+        await fetch('/api/whatsapp/session', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sessionName: statusData.client.username
+          })
+        });
+      }
+
+      console.log('🔧 Creando nueva sesión...');
+      const response = await fetch('/api/whatsapp/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sessionName: statusData.client?.username // Usamos el username directamente
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create session');
+      }
+
+      const data = await response.json();
+      console.log('✨ Sesión creada:', data);
       
-      // Guardamos el nombre de la sesión cuando la creamos
-      const sessionName = data.session || data.name || data.session_id
-      console.log('✨ Nombre de sesión que vamos a usar:', sessionName)
-      setSessionName(sessionName)
-      setShouldPoll(true)
-      await getQR()
+      setSessionName(statusData.client?.username);
+      setShouldPoll(true);
+      await getQR();
     } catch (error) {
-      console.error('❌ Error creando sesión:', error)
-      setError('No se pudo crear la sesión de WhatsApp')
+      console.error('❌ Error creando sesión:', error);
+      setError('No se pudo crear la sesión de WhatsApp');
       toast({
         variant: "destructive",
         title: "Error",
         description: "No se pudo crear la sesión de WhatsApp"
-      })
+      });
     }
   }
 
@@ -218,7 +208,7 @@ export function WhatsAppQR() {
           })
 
           setTimeout(() => {
-            router.push('/dashboard')
+            router.push('/dashboard/onboarding/business-profile')
           }, 1500)
         } catch (error) {
           console.error('Error durante la actualización:', error)
@@ -240,100 +230,61 @@ export function WhatsAppQR() {
 
   const updatePocketBase = async (sessionId: string) => {
     try {
-      console.log('💾 Iniciando actualización en PocketBase...')
+      console.log('💾 Iniciando actualización en PocketBase...');
       console.log('📝 Datos exactos a guardar:', {
         sessionId,
         userId,
         clientId
-      })
+      });
 
       if (!userId) {
-        throw new Error('No hay userId para actualizar')
+        throw new Error('No hay userId para actualizar');
       }
 
-      await authPocketBase();
-
-      // Primero buscamos el cliente existente
-      console.log('🔍 Buscando cliente existente...')
-      console.log('🔑 userId:', userId)
+      // Solo actualizamos si la sesión está activa
+      const statusResponse = await fetch('/api/whatsapp/status');
+      const statusData = await statusResponse.json();
       
-      const records = await pb.collection('clients').getList(1, 1, {
-        filter: `clerk_id = "${userId}"`
-      })
-      
-      console.log('📄 Resultado completo de la búsqueda:', {
-        totalItems: records.totalItems,
-        page: records.page,
-        perPage: records.perPage,
-        items: records.items,
-        filter: `clerk_id = "${userId}"`
-      })
-      
-      if (records.items.length > 0) {
-        const client = records.items[0]
-        console.log('✅ Cliente encontrado, actualizando:', client)
-        setClientId(client.id)
-        
-        const updated = await pb.collection('clients').update(client.id, {
-          session_id: sessionId,
-          phone_client: 0,
-          updated: new Date().toISOString()
-        })
-        console.log('✅ Cliente actualizado:', updated)
-        return updated
-      } else {
-        console.error('❌ No se encontró el cliente para actualizar')
-        throw new Error('No se encontró el cliente para actualizar')
+      if (statusData.status !== 'WORKING') {
+        console.log('⚠️ No se actualiza PocketBase porque la sesión no está activa');
+        return;
       }
-    } catch (error) {
-      console.error('❌ Error actualizando PocketBase:', error)
-      throw error
-    }
-  }
 
-  const fetchClient = async () => {
-    try {
-      // Asegurarnos de estar autenticados antes de cualquier operación
-      await authPocketBase();
+      const client = await getClientByClerkId(userId);
       
-      console.log('🔍 Buscando cliente directo por clerk_id:', userId);
-      
-      const records = await pb.collection('clients').getList(1, 1, {
-        filter: `clerk_id = "${userId}"`
+      if (!client) {
+        console.error('❌ No se encontró el cliente en la base de datos');
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se encontró tu perfil en la base de datos"
+        });
+        throw new Error('No se encontró el cliente en la base de datos');
+      }
+
+      console.log('✅ Cliente encontrado, actualizando:', client);
+      const updated = await updateClient(client.id, {
+        session_id: sessionId,
+        phone_client: statusData.me?.id ? parseInt(statusData.me.id) : 0,
+        updated: new Date().toISOString()
       });
       
-      console.log('📄 Resultado de búsqueda:', {
-        totalItems: records.totalItems,
-        authStoreToken: pb.authStore.token ? 'Present' : 'Missing',
-        authStoreIsValid: pb.authStore.isValid
-      });
-      
-      if (records.items.length > 0) {
-        const clientRecord = records.items[0];
-        console.log('✅ Cliente encontrado:', clientRecord);
-        setClientId(clientRecord.id);
-        return clientRecord;
-      } else {
-        console.log('❌ Cliente no encontrado');
-        return null;
-      }
+      console.log('✅ Cliente actualizado exitosamente:', updated);
+      return updated;
     } catch (error) {
-      console.error('❌ Error en fetchClient:', error);
-      // Verificar si es un error de autenticación
-      if (error.status === 401 || error.status === 403) {
-        console.log('🔄 Error de autenticación, reintentando...');
-        await authPocketBase(); // Reintentar autenticación
-      }
+      console.error('❌ Error actualizando PocketBase:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error actualizando la información"
+      });
       throw error;
     }
-  };
+  }
 
   useEffect(() => {
     if (isLoaded && userId) {
       findClient()
-      
-      // Fetch directo del cliente
-      fetchClient();
     }
   }, [isLoaded, userId])
 
