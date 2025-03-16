@@ -15,15 +15,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger
 } from '@/components/ui/tooltip';
 
 const SIDEBAR_COOKIE_NAME = 'sidebar:state';
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const SIDEBAR_WIDTH = '12rem';
-const SIDEBAR_WIDTH_MOBILE = '14rem';
-const SIDEBAR_WIDTH_ICON = '2rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
 type SidebarContext = {
@@ -157,7 +153,7 @@ export const Sidebar = React.forwardRef<
             className='w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden'
             style={
               {
-                '--sidebar-width': SIDEBAR_WIDTH_MOBILE
+                '--sidebar-width': '14rem'
               } as React.CSSProperties
             }
             side={side}
@@ -179,24 +175,26 @@ export const Sidebar = React.forwardRef<
       >
         <div
           className={cn(
-            'relative h-svh w-[--sidebar-width] bg-transparent transition-[width] duration-200 ease-linear',
+            'relative h-svh transition-[width] duration-200 ease-linear',
             'group-data-[collapsible=offcanvas]:w-0',
             'group-data-[side=right]:rotate-180',
             variant === 'floating' || variant === 'inset'
               ? 'group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]'
-              : 'group-data-[collapsible=icon]:w-[--sidebar-width-icon]'
+              : 'group-data-[collapsible=icon]:w-[--sidebar-width-icon]',
+            state === 'expanded' ? 'w-[--sidebar-width]' : 'w-0'
           )}
         />
         <div
           className={cn(
-            'fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex',
+            'fixed inset-y-0 z-10 h-svh transition-all duration-200 ease-linear md:flex',
             side === 'left'
               ? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
               : 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',
             variant === 'floating' || variant === 'inset'
               ? 'p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]'
-              : 'group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l',
-            className
+              : 'group-data-[collapsible=icon]:w-[--sidebar-width-icon]',
+            'group-data-[side=left]:border-r group-data-[side=right]:border-l',
+            state === 'expanded' ? 'w-[--sidebar-width]' : 'w-[--sidebar-width-icon]'
           )}
           {...props}
         >

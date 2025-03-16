@@ -6,9 +6,6 @@ import {
   Building2,
   HelpCircle,
   Users,
-  Smartphone,
-  ShoppingBag,
-  FileText,
   KanbanSquare
 } from "lucide-react"
 
@@ -46,11 +43,6 @@ export const routes: RouteSection[] = [
         label: "Contacts",
         icon: Users,
         href: "/dashboard/contacts",
-      },
-      {
-        label: "Dispositivo",
-        icon: Smartphone,
-        href: "/dashboard/device",
       }
     ],
   },
@@ -61,16 +53,6 @@ export const routes: RouteSection[] = [
         label: "Productos",
         icon: Store,
         href: "/dashboard/products",
-      },
-      {
-        label: "Pedidos",
-        icon: ShoppingBag,
-        href: "/dashboard/orders",
-      },
-      {
-        label: "Catálogo",
-        icon: FileText,
-        href: "/dashboard/catalog",
       },
       {
         label: "Templates",
@@ -98,7 +80,7 @@ export const routes: RouteSection[] = [
     section: "Ayuda",
     routes: [
       {
-        label: "Centro de Ayuda",
+        label: "Ayuda",
         icon: HelpCircle,
         href: "/dashboard/help",
       }

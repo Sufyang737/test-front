@@ -28,33 +28,28 @@ import { profileSchema, type ProfileFormValues } from '../utils/form-schema';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangleIcon, Trash, Trash2Icon } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { SubmitHandler, useFieldArray, useForm } from 'react-hook-form';
 
 interface ProfileFormType {
   initialData: any | null;
-  categories: any;
+  clientId: string;
+  conversationId: string;
+  onSuccess?: () => void;
 }
+
 const ProfileCreateForm: React.FC<ProfileFormType> = ({
   initialData,
-  categories
+  clientId,
+  conversationId,
+  onSuccess
 }) => {
-  const params = useParams();
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [imgLoading, setImgLoading] = useState(false);
   const title = initialData ? 'Edit product' : 'Create Your Profile';
   const description = initialData
     ? 'Edit a product.'
     : 'To create your resume, we first need some basic information about you.';
-  const toastMessage = initialData ? 'Product updated.' : 'Product created.';
-  const action = initialData ? 'Save changes' : 'Create';
-  const [previousStep, setPreviousStep] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
-  const [data, setData] = useState({});
-  const delta = currentStep - previousStep;
 
   const defaultValues = {
     jobs: [
@@ -85,39 +80,8 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
     name: 'jobs'
   });
 
-  const onSubmit = async (data: ProfileFormValues) => {
-    try {
-      setLoading(true);
-      if (initialData) {
-        // await axios.post(`/api/products/edit-product/${initialData._id}`, data);
-      } else {
-        // const res = await axios.post(`/api/products/create-product`, data);
-        // console.log("product", res);
-      }
-      router.refresh();
-      router.push(`/dashboard/products`);
-    } catch (error: any) {
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onDelete = async () => {
-    try {
-      setLoading(true);
-      //   await axios.delete(`/api/${params.storeId}/products/${params.productId}`);
-      router.refresh();
-      router.push(`/${params.storeId}/products`);
-    } catch (error: any) {
-    } finally {
-      setLoading(false);
-      setOpen(false);
-    }
-  };
-
   const processForm: SubmitHandler<ProfileFormValues> = (data) => {
     console.log('data ==>', data);
-    setData(data);
     // api call and reset
     // form.reset();
   };
@@ -133,7 +97,6 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
     {
       id: 'Step 2',
       name: 'Professional Informations',
-      // fields are mapping and flattening for the error to be trigger  for the dynamic fields
       fields: fields
         ?.map((_, index) => [
           `jobs.${index}.jobtitle`,
@@ -142,7 +105,6 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
           `jobs.${index}.enddate`,
           `jobs.${index}.jobcountry`,
           `jobs.${index}.jobcity`
-          // Add other field names as needed
         ])
         .flat()
     },
@@ -162,14 +124,12 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
       if (currentStep === steps.length - 2) {
         await form.handleSubmit(processForm)();
       }
-      setPreviousStep(currentStep);
       setCurrentStep((step) => step + 1);
     }
   };
 
   const prev = () => {
     if (currentStep > 0) {
-      setPreviousStep(currentStep);
       setCurrentStep((step) => step - 1);
     }
   };
@@ -178,7 +138,7 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
   const cities = [{ id: '2', name: 'kerala' }];
 
   return (
-    <>
+    <div className="w-full">
       <div className='flex items-center justify-between'>
         <Heading title={title} description={description} />
         {initialData && (
@@ -186,14 +146,14 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
             disabled={loading}
             variant='destructive'
             size='sm'
-            onClick={() => setOpen(true)}
+            onClick={() => setLoading(true)}
           >
             <Trash className='h-4 w-4' />
           </Button>
         )}
       </div>
       <Separator />
-      <div>
+      <div className="w-full">
         <ul className='flex gap-4'>
           {steps.map((step, index) => (
             <li key={step.name} className='md:flex-1'>
@@ -582,7 +542,7 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
               <div>
                 <h1>Completed</h1>
                 <pre className='whitespace-pre-wrap'>
-                  {JSON.stringify(data)}
+                  {/* {JSON.stringify(data)} */}
                 </pre>
               </div>
             )}
@@ -640,7 +600,7 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

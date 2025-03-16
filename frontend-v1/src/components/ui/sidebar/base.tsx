@@ -43,7 +43,6 @@ export function useSidebar() {
   if (!context) {
     throw new Error('useSidebar must be used within a Sidebar.');
   }
-
   return context;
 }
 
@@ -58,35 +57,53 @@ export function SidebarProvider({
 }: SidebarProviderProps) {
   const isMobile = useIsMobile();
   const [openMobile, setOpenMobile] = React.useState(false);
+  const [open, setOpen] = React.useState(() => {
+    // Initialize from cookie if available
+    if (typeof window !== 'undefined') {
+      const cookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith(SIDEBAR_COOKIE_NAME));
+      return cookie ? cookie.split('=')[1] === 'true' : defaultOpen;
+    }
+    return defaultOpen;
+  });
 
-  const [open, setOpen] = React.useState(defaultOpen);
+  // Debounced cookie update
+  const debouncedSetCookie = React.useCallback(
+    React.useMemo(
+      () =>
+        debounce((value: boolean) => {
+          document.cookie = `${SIDEBAR_COOKIE_NAME}=${value}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+        }, 1000),
+      []
+    ),
+    []
+  );
 
   React.useEffect(() => {
-    document.cookie = `${SIDEBAR_COOKIE_NAME}=${open}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
-  }, [open]);
+    debouncedSetCookie(open);
+  }, [open, debouncedSetCookie]);
 
   const toggleSidebar = React.useCallback(() => {
     if (isMobile) {
-      setOpenMobile((open) => !open);
+      setOpenMobile(prev => !prev);
     } else {
-      setOpen((open) => !open);
+      setOpen(prev => !prev);
     }
-  }, [isMobile, setOpen, setOpenMobile]);
+  }, [isMobile]);
+
+  // Memoize keyboard event handler
+  const handleKeyDown = React.useCallback((event: KeyboardEvent) => {
+    if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      toggleSidebar();
+    }
+  }, [toggleSidebar]);
 
   React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
-        (event.metaKey || event.ctrlKey)
-      ) {
-        event.preventDefault();
-        toggleSidebar();
-      }
-    };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleSidebar]);
+  }, [handleKeyDown]);
 
   const state = open ? 'expanded' : 'collapsed';
 
@@ -105,11 +122,36 @@ export function SidebarProvider({
 
   return (
     <SidebarContext.Provider value={contextValue}>
-      <div className={cn('grid lg:grid-cols-[192px_1fr]', className)}>
+      <div
+        className={cn(
+          'fixed inset-y-0 z-30 flex flex-col transition-all duration-200 ease-out will-change-transform',
+          className
+        )}
+        style={{
+          width: isMobile ? SIDEBAR_WIDTH_MOBILE : open ? SIDEBAR_WIDTH : SIDEBAR_WIDTH_ICON,
+          transform: `translateX(${openMobile ? '0' : '-100%'})`,
+        }}
+      >
         {children}
       </div>
     </SidebarContext.Provider>
   );
+}
+
+// Utility function for debouncing
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
 export const Sidebar = React.forwardRef<

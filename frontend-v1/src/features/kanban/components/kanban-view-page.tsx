@@ -1,4 +1,4 @@
-import PageContainer from '@/components/layout/page-container';
+import { PageContainer } from '@/components/layout/page-container';
 import { Heading } from '@/components/ui/heading';
 import { KanbanBoard } from './kanban-board';
 import NewTaskDialog from './new-task-dialog';

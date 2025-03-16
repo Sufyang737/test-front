@@ -1,156 +1,112 @@
-'use client'
+import { useEffect, useRef } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { type Message } from '../../hooks/use-chats';
+import { cn } from '@/lib/utils';
 
-import { useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
-import { Check, CheckCheck, Loader2 } from 'lucide-react'
-import { Message } from '@/features/chat/hooks/use-chats'
-import { motion, AnimatePresence } from 'framer-motion'
-
-interface ChatMessagesProps {
-  messages: Message[]
-  userId: string
-  onLoadMore?: () => void
-  loading?: boolean
+export interface ChatMessagesProps {
+  messages: Message[];
+  loading: boolean;
+  hasMore: boolean;
+  isFetchingMore: boolean;
+  onLoadMore: () => Promise<void>;
 }
 
-export function ChatMessages({ messages, userId, onLoadMore, loading }: ChatMessagesProps) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const loadMoreRef = useRef<HTMLDivElement>(null)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const prevScrollHeight = useRef<number>(0)
+export function ChatMessages({
+  messages,
+  loading,
+  hasMore,
+  isFetchingMore,
+  onLoadMore
+}: ChatMessagesProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
 
-  // Initial scroll to bottom
   useEffect(() => {
-    if (isInitialLoad && scrollRef.current && messages.length > 0) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-      setIsInitialLoad(false)
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isInitialLoad])
+  }, [messages]);
 
-  // Maintain scroll position when loading older messages
   useEffect(() => {
-    if (scrollRef.current && !isInitialLoad) {
-      const newScrollHeight = scrollRef.current.scrollHeight
-      const heightDifference = newScrollHeight - prevScrollHeight.current
-      if (heightDifference > 0 && loading) {
-        scrollRef.current.scrollTop = heightDifference
-      }
-      prevScrollHeight.current = newScrollHeight
-    }
-  }, [messages, loading, isInitialLoad])
+    if (!hasMore || isFetchingMore) return;
 
-  // Set up infinite scroll for loading older messages
-  useEffect(() => {
-    if (onLoadMore && !observerRef.current) {
-      observerRef.current = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && !loading) {
-            onLoadMore()
-          }
-        },
-        { threshold: 0.1 }
-      )
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          onLoadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
 
-      if (loadMoreRef.current) {
-        observerRef.current.observe(loadMoreRef.current)
-      }
+    if (loadMoreTriggerRef.current) {
+      observer.observe(loadMoreTriggerRef.current);
     }
+
+    observerRef.current = observer;
 
     return () => {
       if (observerRef.current) {
-        observerRef.current.disconnect()
+        observerRef.current.disconnect();
       }
-    }
-  }, [onLoadMore, loading])
+    };
+  }, [hasMore, isFetchingMore, onLoadMore]);
 
-  // Reverse messages array to show oldest first
-  const reversedMessages = [...messages].reverse()
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="animate-pulse">Loading messages...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-full flex flex-col">
-      <div 
-        ref={scrollRef}
-        className="overflow-y-auto flex-1"
-      >
-        {/* Messages container */}
-        <div className="min-h-full">
-          {/* Loading indicator */}
-          {loading && (
-            <div className="flex justify-center py-2">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+    <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      {hasMore && (
+        <div
+          ref={loadMoreTriggerRef}
+          className="h-8 flex items-center justify-center"
+        >
+          {isFetchingMore ? (
+            <div className="animate-pulse">Loading more messages...</div>
+          ) : (
+            <div className="text-muted-foreground">Scroll to load more</div>
           )}
-
-          {/* Load more trigger */}
-          {onLoadMore && <div ref={loadMoreRef} className="h-1" />}
-
-          {/* Messages */}
-          <div className="space-y-1 p-4">
-            <AnimatePresence initial={false}>
-              {reversedMessages.map((message, index) => {
-                const isUser = message.sender.id === userId
-                const showDate = index === 0 || 
-                  new Date(message.timestamp).toDateString() !== 
-                  new Date(reversedMessages[index - 1].timestamp).toDateString()
-
-                return (
-                  <motion.div
-                    key={message.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {showDate && (
-                      <div className="flex justify-center my-2">
-                        <div className="bg-muted/30 backdrop-blur-sm px-3 py-1 rounded-full text-[10px] text-muted-foreground">
-                          {format(new Date(message.timestamp), "EEEE, d 'de' MMMM", { locale: es })}
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className={cn(
-                      "flex gap-1 items-end",
-                      isUser ? "justify-end" : "justify-start"
-                    )}>
-                      <div className={cn(
-                        "max-w-[85%] break-words rounded-lg px-3 py-2",
-                        isUser 
-                          ? "bg-primary text-primary-foreground rounded-tr-none" 
-                          : "bg-muted rounded-tl-none"
-                      )}>
-                        <div className="whitespace-pre-wrap text-sm">{message.content}</div>
-                        <div className={cn(
-                          "flex items-center gap-1 text-[10px]",
-                          isUser ? "text-primary-foreground/70 justify-end" : "text-muted-foreground"
-                        )}>
-                          <span>
-                            {format(new Date(message.timestamp), 'HH:mm')}
-                          </span>
-                          {isUser && (
-                            <span className="flex items-center">
-                              {message.status === 'read' ? (
-                                <CheckCheck className="h-3 w-3" />
-                              ) : message.status === 'delivered' ? (
-                                <Check className="h-3 w-3" />
-                              ) : (
-                                <Check className="h-3 w-3 opacity-50" />
-                              )}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
-          </div>
         </div>
+      )}
+      <div className="space-y-4">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={cn(
+              'flex',
+              message.type === 'user' ? 'justify-end' : 'justify-start'
+            )}
+          >
+            <div
+              className={cn(
+                'rounded-lg px-4 py-2 max-w-[80%]',
+                message.type === 'user'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted'
+              )}
+            >
+              <div className="break-words">{message.content}</div>
+              <div
+                className={cn(
+                  'text-xs mt-1',
+                  message.type === 'user'
+                    ? 'text-primary-foreground/70'
+                    : 'text-muted-foreground'
+                )}
+              >
+                {new Date(message.timestamp).toLocaleString()}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
-  )
-} 
+    </ScrollArea>
+  );
+}

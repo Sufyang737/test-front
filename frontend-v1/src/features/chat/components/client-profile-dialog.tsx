@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -17,81 +17,90 @@ import PocketBase from 'pocketbase'
 
 const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL)
 
+interface ProfileLead {
+  id: string;
+  name_client: string;
+  email: string;
+  phone: string;
+  instagram?: string;
+  facebook?: string;
+  x?: string;
+  description?: string;
+  name_company?: string;
+  description_company?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RecordModel extends ProfileLead {
+  collectionId: string;
+  collectionName: string;
+}
+
 interface ClientProfileProps {
   conversationId: string
   clientId: string
-  adminToken?: string
 }
 
-interface ProfileLead {
-  id: string
-  instagram: string
-  facebook: string
-  x: string
-  name_client: string
-  name_company: string
-  description_company: string
-  conversation: string
-  client_id: string
-}
+const newProfileDefaults: Partial<ProfileLead> = {
+  name_client: '',
+  email: '',
+  phone: '',
+  instagram: '',
+  facebook: '',
+  x: '',
+  description: '',
+  name_company: '',
+  description_company: '',
+  status: 'active'
+};
 
-export function ClientProfileDialog({ conversationId, clientId, adminToken }: ClientProfileProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [profile, setProfile] = useState<ProfileLead | null>(null)
-  const { toast } = useToast()
+export function ClientProfileDialog({ conversationId, clientId }: ClientProfileProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [profile, setProfile] = useState<ProfileLead | null>(null);
+  const { toast } = useToast();
+  const adminToken = process.env.NEXT_PUBLIC_POCKETBASE_ADMIN_TOKEN;
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       if (!adminToken) {
-        throw new Error('No se encontró el token de administrador')
+        throw new Error('No se encontró el token de administrador');
       }
 
-      if (!conversationId || !clientId) {
-        throw new Error('Faltan IDs necesarios para cargar el perfil')
-      }
-
-      setLoading(true)
+      setLoading(true);
       
-      // Autenticar con el token proporcionado
-      pb.authStore.save(adminToken)
-
-      // Buscar perfil existente
       const records = await pb.collection('profile_lead').getList(1, 1, {
-        filter: `conversation="${conversationId}" && client_id="${clientId}"`
-      })
+        filter: `client_id = "${clientId}"`
+      });
 
       if (records.items.length > 0) {
-        setProfile(records.items[0])
+        const data = records.items[0] as RecordModel;
+        setProfile(data);
       } else {
-        // Crear nuevo perfil
+        // Create new profile with defaults
         const newProfile = {
-          name_client: "",
-          conversation: conversationId,
+          ...newProfileDefaults,
           client_id: clientId,
-          instagram: "",
-          facebook: "",
-          x: "",
-          name_company: "",
-          description_company: ""
-        }
+          conversation: conversationId
+        };
         
-        const createdProfile = await pb.collection('profile_lead').create(newProfile)
-        setProfile(createdProfile)
+        const createdProfile = await pb.collection('profile_lead').create(newProfile) as RecordModel;
+        setProfile(createdProfile);
       }
     } catch (error) {
-      console.error('Error al cargar el perfil:', error)
+      console.error('Error:', error);
       toast({
-        variant: "destructive",
-        title: "Error",
-        description: error instanceof Error ? error.message : "No se pudo cargar el perfil del cliente"
-      })
-      setProfile(null)
+        title: 'Error',
+        description: 'No se pudo cargar el perfil del cliente',
+        variant: 'destructive'
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  }, [clientId, conversationId, adminToken, toast]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -137,7 +146,7 @@ export function ClientProfileDialog({ conversationId, clientId, adminToken }: Cl
     if (isOpen) {
       fetchProfile()
     }
-  }, [isOpen, conversationId, clientId, adminToken])
+  }, [isOpen, clientId, conversationId, adminToken, fetchProfile])
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

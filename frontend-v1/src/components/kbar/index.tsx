@@ -15,14 +15,14 @@ import useThemeSwitching from './use-theme-switching';
 export default function KBar({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
-  const navigateTo = (url: string) => {
-    router.push(url);
-  };
-
-  // These action are for the navigation
   const actions = useMemo(
-    () =>
-      navItems.flatMap((navItem) => {
+    () => {
+      const navigateTo = (url: string) => {
+        router.push(url);
+      };
+
+      // These action are for the navigation
+      return navItems.flatMap((navItem) => {
         // Only include base action if the navItem has a real URL and is not just a container
         const baseAction =
           navItem.url !== '#'
@@ -51,8 +51,9 @@ export default function KBar({ children }: { children: React.ReactNode }) {
 
         // Return only valid actions (ignoring null base actions for containers)
         return baseAction ? [baseAction, ...childActions] : childActions;
-      }),
-    []
+      });
+    },
+    [router]
   );
 
   return (

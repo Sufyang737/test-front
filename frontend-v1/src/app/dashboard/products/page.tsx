@@ -1,4 +1,4 @@
-import PageContainer from '@/components/layout/page-container'
+import { PageContainer } from '@/components/layout/page-container'
 import { Heading } from '@/components/ui/heading'
 import { Separator } from '@/components/ui/separator'
 import ProductsClient from './products-client'

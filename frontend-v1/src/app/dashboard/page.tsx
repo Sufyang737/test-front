@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import PocketBase from 'pocketbase';
 import OverviewPage from "@/features/overview/components/overview";
+import { PageContainer } from '@/components/layout/page-container';
 
 const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL);
 const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL;
@@ -49,22 +50,18 @@ export default async function DashboardPage() {
 
     // Si llegamos aquí, mostramos el dashboard
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="w-full">
-          <OverviewPage />
-        </div>
-      </div>
+      <PageContainer>
+        <OverviewPage />
+      </PageContainer>
     );
 
   } catch (error) {
     console.error('Error general:', error);
     // Si hay un error general, mostramos el dashboard en lugar de redirigir
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="w-full">
-          <OverviewPage />
-        </div>
-      </div>
+      <PageContainer>
+        <OverviewPage />
+      </PageContainer>
     );
   }
 }

@@ -2,11 +2,14 @@ import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
-import { getOrCreateClient } from '@/lib/utils/pocketbase';
+import PocketBase from 'pocketbase';
+
+const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL);
+pb.authStore.save(process.env.POCKETBASE_TOKEN_ADMIN || '');
 
 export async function POST(req: Request) {
   try {
-    console.log('📥 Iniciando webhook de Clerk...')
+    console.log('📥 Iniciando webhook de Clerk...');
     
     // Get the headers
     const headersList = await headers();
@@ -69,27 +72,39 @@ export async function POST(req: Request) {
           email: email_addresses?.[0]?.email_address
         });
 
-        // Crear o actualizar el cliente en PocketBase
-        console.log('🔄 Intentando crear/actualizar cliente en PocketBase...');
-        const client = await getOrCreateClient(userId, {
-          first_name: first_name || undefined,
-          last_name: last_name || undefined,
-          username: username || email_addresses?.[0]?.email_address || undefined
-        });
+        // Solo actualizar si el cliente existe
+        try {
+          const existingRecord = await pb.collection('clients').getFirstListItem(`clerk_id = "${userId}"`);
+          
+          if (existingRecord) {
+            console.log('🔄 Actualizando cliente existente en PocketBase...');
+            const updateData = {
+              first_name: first_name || existingRecord.first_name,
+              last_name: last_name || existingRecord.last_name,
+              username: username || existingRecord.username
+            };
 
-        if (client) {
-          console.log('✅ Cliente creado/actualizado exitosamente:', client);
+            const updatedRecord = await pb.collection('clients').update(existingRecord.id, updateData);
+            console.log('✅ Cliente actualizado exitosamente:', updatedRecord);
+
+            return NextResponse.json({
+              success: true,
+              message: 'Cliente actualizado exitosamente',
+              client: updatedRecord
+            });
+          } else {
+            console.log('ℹ️ Cliente no encontrado en webhook - ignorando actualización');
+            return NextResponse.json({
+              success: true,
+              message: 'No se encontró el cliente para actualizar - ignorando'
+            });
+          }
+        } catch (error) {
+          console.log('ℹ️ Cliente no encontrado en webhook - ignorando actualización');
           return NextResponse.json({
             success: true,
-            message: 'Cliente creado/actualizado exitosamente',
-            client
+            message: 'No se encontró el cliente para actualizar - ignorando'
           });
-        } else {
-          console.error('❌ Error: No se pudo crear/actualizar el cliente');
-          return NextResponse.json({
-            success: false,
-            message: 'No se pudo crear/actualizar el cliente'
-          }, { status: 500 });
         }
 
       } catch (error) {

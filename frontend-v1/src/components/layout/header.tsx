@@ -16,26 +16,28 @@ export function Header() {
   return (
     <header className={cn(
       'fixed top-0 right-0 flex h-[50px] items-center border-b bg-background z-40',
-      isCollapsed ? 'left-[60px]' : 'left-[240px]',
-      'transition-all duration-300'
+      isCollapsed ? 'left-[60px]' : 'left-[192px]',
+      'transition-all duration-200 ease-linear'
     )}>
-      <div className='flex items-center justify-start gap-4 px-4 w-1/3'>
-        <SidebarTrigger className='h-9 w-9' />
-        <Separator orientation='vertical' className='h-6' />
-        <div className="flex items-center gap-2">
-          <Breadcrumbs />
+      <div className="container mx-auto max-w-7xl px-4 flex items-center justify-between w-full">
+        <div className='flex items-center gap-4'>
+          <SidebarTrigger className='h-9 w-9' />
+          <Separator orientation='vertical' className='h-6' />
+          <div className="flex items-center gap-2">
+            <Breadcrumbs />
+          </div>
         </div>
-      </div>
 
-      <div className='flex items-center justify-center w-1/3'>
-        <div className='hidden md:block w-full max-w-md'>
-          <SearchInput />
+        <div className='flex-1 flex items-center justify-center max-w-md mx-auto'>
+          <div className='hidden md:block w-full'>
+            <SearchInput />
+          </div>
         </div>
-      </div>
 
-      <div className='flex items-center justify-end gap-4 w-1/3 px-4'>
-        <UserNav />
-        <ThemeToggle />
+        <div className='flex items-center gap-4'>
+          <UserNav />
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Heading } from "@/components/ui/heading"
 import { Separator } from "@/components/ui/separator"
 import { ContactsClient } from "./contacts-client"
@@ -48,7 +48,7 @@ export function ContactsViewPage() {
   const { toast } = useToast()
   const { user } = useUser()
 
-  const fetchContacts = async () => {
+  const fetchContacts = useCallback(async () => {
     try {
       if (!user) {
         setLoading(false)
@@ -67,7 +67,6 @@ export function ContactsViewPage() {
         expand: 'details_conversation'
       })
 
-      // Obtener los detalles de conversación para cada contacto
       const contactsWithDetails = await Promise.all(
         contacts.items.map(async (contact) => {
           const details = await pb.collection('details_conversation').getFirstListItem(
@@ -75,17 +74,35 @@ export function ContactsViewPage() {
             { sort: '-created' }
           ).catch(() => null)
 
+          const detailsData = details ? {
+            id: details.id,
+            lead_id: details.lead_id,
+            client_id: details.client_id,
+            priority: details.priority as "high" | "medium" | "low",
+            customer_source: details.customer_source as "referral" | "social" | "website" | "whatsapp",
+            conversation_status: details.conversation_status as "open" | "closed" | "pending",
+            request_type: details.request_type as "technical support" | "sales" | "general inquiry" | "complaint"
+          } : undefined
+
           return {
-            ...contact,
-            details: details
-          }
+            name_client: contact.name_client,
+            name_company: contact.name_company,
+            description_company: contact.description_company,
+            instagram: contact.instagram,
+            facebook: contact.facebook,
+            x: contact.x,
+            client_id: contact.client_id,
+            created: contact.created,
+            updated: contact.updated,
+            id: contact.id,
+            details: detailsData
+          } as ContactData
         })
       )
 
       setData(contactsWithDetails)
     } catch (error) {
       console.error('Error fetching contacts:', error)
-      // Solo mostrar el toast si no estamos en el estado de carga inicial
       if (!loading) {
         toast({
           title: "Error",
@@ -96,11 +113,11 @@ export function ContactsViewPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, loading, toast])
 
   useEffect(() => {
     fetchContacts()
-  }, [user])
+  }, [fetchContacts])
 
   const onCreateSuccess = () => {
     setOpen(false)
@@ -123,21 +140,23 @@ export function ContactsViewPage() {
 
   return (
     <>
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between">
-          <Heading title="Contactos" description="Gestiona tus contactos y leads" />
+      <div className="container mx-auto max-w-7xl px-4 flex items-center justify-between w-full">
+        <div className="w-full space-y-4">
+          <div className="flex items-center justify-between">
+            <Heading title="Contactos" description="Gestiona tus contactos y leads" />
+          </div>
+          <Separator />
+          <ContactsClient 
+            data={data} 
+            columns={columns({ onUpdate: fetchContacts })} 
+            loading={loading}
+            onEdit={(contact) => {
+              setSelectedContact(contact)
+              setOpen(true)
+            }}
+            onUpdate={fetchContacts}
+          />
         </div>
-        <Separator />
-        <ContactsClient 
-          data={data} 
-          columns={columns({ onUpdate: fetchContacts })} 
-          loading={loading}
-          onEdit={(contact) => {
-            setSelectedContact(contact)
-            setOpen(true)
-          }}
-          onUpdate={fetchContacts}
-        />
       </div>
       <ContactForm 
         open={open}

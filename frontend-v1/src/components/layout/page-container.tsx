@@ -1,14 +1,20 @@
+'use client';
+
 import React from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from "@/lib/utils";
 
 interface PageContainerProps {
-  children: React.ReactNode
+  children: React.ReactNode;
+  className?: string;
 }
 
-export default function PageContainer({ children }: PageContainerProps) {
+export function PageContainer({ children, className }: PageContainerProps) {
   return (
-    <div className="flex flex-col flex-1 p-4">
+    <div className={cn(
+      "container mx-auto max-w-7xl px-4 flex items-center justify-between w-full",
+      className
+    )}>
       {children}
     </div>
-  )
+  );
 }

@@ -7,60 +7,61 @@ import { ConversationDetailsPanel } from './conversation-details-panel'
 import { useChats } from '../hooks/use-chats'
 
 export function ChatContainer() {
-  const { userId, user } = useAuth()
+  const { userId } = useAuth()
   const { 
     chats, 
     activeChat, 
-    loading, 
-    error, 
+    loading,
     messages, 
     sendMessage, 
     selectChat,
-    currentConversation,
-    toggleBotStatus,
-    isUpdatingBot
+    getBotStatus,
+    toggleBot,
+    loadingMessages,
+    hasMoreMessages,
+    loadMoreMessages,
+    isFetchingMoreMessages
   } = useChats()
   const [showDetails, setShowDetails] = useState(false)
-  const isSupport = user?.publicMetadata?.role === 'support'
+  const [botEnabled, setBotEnabled] = useState(false)
 
   useEffect(() => {
-    if (activeChat && isSupport) {
+    if (activeChat) {
       setShowDetails(true)
     }
-  }, [activeChat, isSupport])
+  }, [activeChat])
+
+  const handleSendMessage = async (content: string, file?: File) => {
+    await sendMessage(content);
+  };
 
   if (!userId) {
     return <div>Please sign in to access the chat.</div>
   }
 
-  if (error) {
-    return <div className="text-red-500">{error}</div>
-  }
-
   return (
     <div className="flex h-screen bg-gray-100">
       <div className="w-1/4 border-r bg-white">
-        <ChatList
-          chats={chats}
-          activeChat={activeChat}
-          loading={loading}
-          onSelectChat={selectChat}
-        />
+        <ChatList />
       </div>
       
-      <div className={`flex-1 flex flex-col ${showDetails && isSupport ? 'w-1/2' : 'w-3/4'}`}>
+      <div className={`flex-1 flex flex-col ${showDetails ? 'w-1/2' : 'w-3/4'}`}>
         {activeChat ? (
           <>
             <div className="flex-1 overflow-hidden">
-              <ChatMessages messages={messages} />
+              <ChatMessages 
+                messages={messages}
+                loadingMessages={loadingMessages}
+                hasMoreMessages={hasMoreMessages}
+                loadMoreMessages={loadMoreMessages}
+                isFetchingMoreMessages={isFetchingMoreMessages}
+              />
             </div>
             <div className="p-4 border-t bg-white">
               <ChatInput 
-                onSend={sendMessage}
+                onSendMessage={handleSendMessage}
                 disabled={loading}
-                currentConversation={currentConversation}
-                onToggleBot={toggleBotStatus}
-                isUpdatingBot={isUpdatingBot}
+                botEnabled={botEnabled}
               />
             </div>
           </>
@@ -71,11 +72,19 @@ export function ChatContainer() {
         )}
       </div>
 
-      {isSupport && showDetails && activeChat && (
+      {showDetails && activeChat && (
         <div className="w-1/4 border-l bg-white overflow-y-auto">
           <ConversationDetailsPanel
-            conversationId={activeChat}
-            onClose={() => setShowDetails(false)}
+            botEnabled={botEnabled}
+            onToggleBot={async () => {
+              if (activeChat.id) {
+                const success = await toggleBot(activeChat.id, userId, !botEnabled);
+                if (success) {
+                  setBotEnabled(!botEnabled);
+                }
+              }
+            }}
+            onShowProfile={() => setShowDetails(false)}
           />
         </div>
       )}

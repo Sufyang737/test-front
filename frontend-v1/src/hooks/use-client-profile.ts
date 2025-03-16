@@ -44,11 +44,23 @@ export function useClientProfile() {
         })
 
         if (profileRecords.items.length > 0) {
-          setProfile(profileRecords.items[0] as ClientProfile)
+          const record = profileRecords.items[0]
+          const mappedProfile: ClientProfile = {
+            id: record.id,
+            client_id: record.client_id,
+            name_company: record.name_company || '',
+            description: record.description || '',
+            instagram: record.instagram || '',
+            facebook: record.facebook || '',
+            website: record.website || '',
+            x: record.x || '',
+            opening_hours: record.opening_hours || ''
+          }
+          setProfile(mappedProfile)
         }
       } catch (err) {
         console.error('Error fetching client profile:', err)
-        setError(err instanceof Error ? err.message : 'Failed to fetch profile')
+        setError(err instanceof Error ? err.message : 'Unknown error')
       } finally {
         setLoading(false)
       }

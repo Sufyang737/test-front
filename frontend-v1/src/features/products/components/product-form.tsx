@@ -79,95 +79,114 @@ export default function ProductForm({
   }
 
   return (
-    <Card className='mx-auto w-full'>
-      <CardHeader>
-        <CardTitle className='text-left text-2xl font-bold'>
-          {pageTitle}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-8'>
-            <FormField
-              control={form.control}
-              name='image'
-              render={({ field }) => (
-                <div className='space-y-6'>
-                  <FormItem className='w-full'>
-                    <FormLabel>Images</FormLabel>
-                    <FormControl>
-                      <FileUploader
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        maxFiles={4}
-                        maxSize={4 * 1024 * 1024}
-                        // disabled={loading}
-                        // progresses={progresses}
-                        // pass the onUpload function here for direct upload
-                        // onUpload={uploadFiles}
-                        // disabled={isUploading}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                </div>
-              )}
-            />
-
-            <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
+    <div className="container mx-auto max-w-7xl px-4 flex items-center justify-between w-full">
+      <Card className='w-full'>
+        <CardHeader>
+          <CardTitle className='text-left text-2xl font-bold'>
+            {pageTitle}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-8'>
               <FormField
                 control={form.control}
-                name='name'
+                name='image'
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Product Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder='Enter product name' {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='category'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value)}
-                      value={field.value[field.value.length - 1]}
-                    >
+                  <div className='space-y-6'>
+                    <FormItem className='w-full'>
+                      <FormLabel>Images</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder='Select categories' />
-                        </SelectTrigger>
+                        <FileUploader
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          maxFiles={4}
+                          maxSize={4 * 1024 * 1024}
+                          // disabled={loading}
+                          // progresses={progresses}
+                          // pass the onUpload function here for direct upload
+                          // onUpload={uploadFiles}
+                          // disabled={isUploading}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value='beauty'>Beauty Products</SelectItem>
-                        <SelectItem value='electronics'>Electronics</SelectItem>
-                        <SelectItem value='clothing'>Clothing</SelectItem>
-                        <SelectItem value='home'>Home & Garden</SelectItem>
-                        <SelectItem value='sports'>
-                          Sports & Outdoors
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
+                      <FormMessage />
+                    </FormItem>
+                  </div>
                 )}
               />
+
+              <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
+                <FormField
+                  control={form.control}
+                  name='name'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Product Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder='Enter product name' {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name='category'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value)}
+                        value={field.value[field.value.length - 1]}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder='Select categories' />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value='beauty'>Beauty Products</SelectItem>
+                          <SelectItem value='electronics'>Electronics</SelectItem>
+                          <SelectItem value='clothing'>Clothing</SelectItem>
+                          <SelectItem value='home'>Home & Garden</SelectItem>
+                          <SelectItem value='sports'>
+                            Sports & Outdoors
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name='price'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price</FormLabel>
+                      <FormControl>
+                        <Input
+                          type='number'
+                          step='0.01'
+                          placeholder='Enter price'
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               <FormField
                 control={form.control}
-                name='price'
+                name='description'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Price</FormLabel>
+                    <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Input
-                        type='number'
-                        step='0.01'
-                        placeholder='Enter price'
+                      <Textarea
+                        placeholder='Enter product description'
+                        className='resize-none'
                         {...field}
                       />
                     </FormControl>
@@ -175,28 +194,11 @@ export default function ProductForm({
                   </FormItem>
                 )}
               />
-            </div>
-            <FormField
-              control={form.control}
-              name='description'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder='Enter product description'
-                      className='resize-none'
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type='submit'>Add Product</Button>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+              <Button type='submit'>Add Product</Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

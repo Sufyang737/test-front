@@ -91,14 +91,19 @@ export async function GET() {
     } catch (error) {
       console.error('❌ Error buscando cliente:', error)
       // Si el error es que no se encontró el cliente
-      if (error.status === 404) {
+      if (error instanceof Error && 'status' in error && (error as any).status === 404) {
         return NextResponse.json({
           status: 'ERROR',
           error: 'No client found',
           clerk_id: session.userId
         })
       }
-      throw error
+      
+      return NextResponse.json({
+        status: 'ERROR',
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        clerk_id: session.userId
+      })
     }
 
   } catch (error) {

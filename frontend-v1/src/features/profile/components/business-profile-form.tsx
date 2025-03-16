@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { businessProfileSchema } from "../schemas/business-profile"
+import { businessProfileSchema, type BusinessProfileFormValues } from "../schemas/business-profile"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { TimePicker } from "@/components/ui/time-picker"
 import { Switch } from "@/components/ui/switch"

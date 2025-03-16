@@ -25,7 +25,7 @@ export default function DashboardLayoutClient({
         <SidebarInset>
           <div className="flex min-h-screen flex-col">
             <Header />
-            <main className="flex-1 pt-[50px]">
+            <main className="flex-1 pt-[50px] flex flex-col">
               {children}
             </main>
           </div>
