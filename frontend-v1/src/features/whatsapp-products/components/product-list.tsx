@@ -10,6 +10,8 @@ import { Search, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { DataTable } from '@/components/ui/table/data-table'
 import { columns } from './table/columns'
+import { useClientId } from '@/lib/utils/get-client-id'
+import { useToast } from '@/components/ui/use-toast'
 
 const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL)
 
@@ -29,19 +31,32 @@ export default function WhatsAppProductList() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
+  const { getClientId, isLoaded } = useClientId()
+  const { toast } = useToast()
 
   const fetchProducts = async () => {
+    if (!isLoaded) {
+      return
+    }
+
     try {
       setLoading(true)
+      const clientId = await getClientId()
+      
       const resultList = await pb.collection('products').getList<Product>(1, 50, {
         sort: '-created',
-        filter: searchTerm ? `name ~ "${searchTerm}"` : '',
+        filter: `client_id = "${clientId}"${searchTerm ? ` && name ~ "${searchTerm}"` : ''}`,
         $autoCancel: false
       })
       setProducts(resultList.items)
     } catch (error) {
       if (error instanceof Error) {
         console.error('Error fetching products:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch products',
+          variant: 'destructive'
+        })
       }
     } finally {
       setLoading(false)
@@ -52,11 +67,17 @@ export default function WhatsAppProductList() {
     const abortController = new AbortController()
 
     const fetchWithAbort = async () => {
+      if (!isLoaded) {
+        return
+      }
+
       try {
         setLoading(true)
+        const clientId = await getClientId()
+
         const resultList = await pb.collection('products').getList<Product>(1, 50, {
           sort: '-created',
-          filter: searchTerm ? `name ~ "${searchTerm}"` : '',
+          filter: `client_id = "${clientId}"${searchTerm ? ` && name ~ "${searchTerm}"` : ''}`,
           $autoCancel: false,
           signal: abortController.signal
         })
@@ -65,6 +86,11 @@ export default function WhatsAppProductList() {
         // Ignorar error de cancelación
         if (error instanceof Error && error.name !== 'AbortError') {
           console.error('Error fetching products:', error)
+          toast({
+            title: 'Error',
+            description: 'Failed to fetch products',
+            variant: 'destructive'
+          })
         }
       } finally {
         setLoading(false)
@@ -77,7 +103,7 @@ export default function WhatsAppProductList() {
     return () => {
       abortController.abort()
     }
-  }, [searchTerm])
+  }, [searchTerm, isLoaded])
 
   const formatPrice = (price: number, currency: string) => {
     return new Intl.NumberFormat('en-US', {
@@ -91,10 +117,30 @@ export default function WhatsAppProductList() {
       try {
         await pb.collection('products').delete(id)
         fetchProducts()
+        toast({
+          title: 'Success',
+          description: 'Product deleted successfully'
+        })
       } catch (error) {
         console.error('Error deleting product:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to delete product',
+          variant: 'destructive'
+        })
       }
     }
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <h3 className="text-lg font-medium">Loading...</h3>
+          <p className="text-sm text-gray-500">Please wait while we load your data</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -109,7 +155,7 @@ export default function WhatsAppProductList() {
             className="w-[300px]"
           />
         </div>
-        <Link href="/dashboard/whatsapp-products/new">
+        <Link href="/dashboard/products/new">
           <Button>
             <Plus className="w-4 h-4 mr-2" />
             Add Product

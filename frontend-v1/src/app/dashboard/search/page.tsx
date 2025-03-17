@@ -4,9 +4,9 @@ export default function SearchPage() {
   return (
     <div className="container mx-auto py-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Search WhatsApp Profile</h1>
+        <h1 className="text-2xl font-bold">Buscar Perfil de WhatsApp</h1>
         <p className="text-muted-foreground">
-          Search for a WhatsApp profile by phone number to view their information and recent messages.
+          Busca un perfil de WhatsApp por número de teléfono para ver su información y mensajes recientes.
         </p>
       </div>
       

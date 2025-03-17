@@ -56,7 +56,7 @@ export function ChatMessages({
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="animate-pulse">Loading messages...</div>
+        <div className="animate-pulse">Cargando mensajes...</div>
       </div>
     );
   }
@@ -69,9 +69,9 @@ export function ChatMessages({
           className="h-8 flex items-center justify-center"
         >
           {isFetchingMore ? (
-            <div className="animate-pulse">Loading more messages...</div>
+            <div className="animate-pulse">Cargando más mensajes...</div>
           ) : (
-            <div className="text-muted-foreground">Scroll to load more</div>
+            <div className="text-muted-foreground">Desliza para cargar más</div>
           )}
         </div>
       )}

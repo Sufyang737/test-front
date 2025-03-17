@@ -42,7 +42,7 @@ export function DataTable<TData, TValue>({
   error,
   onRetry,
   searchKey,
-  searchPlaceholder = "Search..."
+  searchPlaceholder = "Buscar..."
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -70,7 +70,7 @@ export function DataTable<TData, TValue>({
           <span>{error}</span>
           {onRetry && (
             <Button variant="outline" size="sm" onClick={onRetry}>
-              Retry
+              Reintentar
             </Button>
           )}
         </AlertDescription>
@@ -143,7 +143,7 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  No hay resultados.
                 </TableCell>
               </TableRow>
             )}
@@ -157,7 +157,7 @@ export function DataTable<TData, TValue>({
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
         >
-          Previous
+          Anterior
         </Button>
         <Button
           variant="outline"
@@ -165,7 +165,7 @@ export function DataTable<TData, TValue>({
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
         >
-          Next
+          Siguiente
         </Button>
       </div>
     </div>

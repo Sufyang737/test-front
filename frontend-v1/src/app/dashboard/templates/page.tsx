@@ -17,27 +17,34 @@ export default function TemplatesPage() {
 
   return (
     <PageContainer>
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <Heading
-            title="Chat Templates"
-            description="Manage your WhatsApp chat templates and variables."
-          />
-          <Button onClick={() => setOpen(true)}>
+          <div className="space-y-1">
+            <h2 className="text-3xl font-bold tracking-tight">Plantillas de Chat</h2>
+            <p className="text-sm text-muted-foreground">
+              Crea y gestiona plantillas para agilizar tu comunicación.
+            </p>
+          </div>
+          <Button 
+            onClick={() => setOpen(true)}
+            className="transition-all duration-200 hover:shadow-lg"
+          >
             <Plus className="h-4 w-4 mr-2" />
-            New Template
+            Nueva Plantilla
           </Button>
         </div>
 
-        <Separator />
+        <Separator className="my-6" />
 
-        <DataTable
-          columns={columns}
-          data={templates}
-          loading={loading}
-          error={error}
-          onRetry={refreshTemplates}
-        />
+        <div className="rounded-lg border bg-card p-4">
+          <DataTable
+            columns={columns}
+            data={templates}
+            loading={loading}
+            error={error}
+            onRetry={refreshTemplates}
+          />
+        </div>
 
         <CreateTemplate 
           open={open} 

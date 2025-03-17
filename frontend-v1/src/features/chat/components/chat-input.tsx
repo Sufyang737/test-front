@@ -191,7 +191,7 @@ export function ChatInput({
             </div>
           )}
 
-          {/* Templates button */}
+          {/* Botón de plantillas */}
           <Button
             variant="ghost"
             size="icon"
@@ -222,7 +222,7 @@ export function ChatInput({
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              {selectedTemplate ? 'Fill Template Variables' : 'Select Template'}
+              {selectedTemplate ? 'Completar Variables de la Plantilla' : 'Seleccionar Plantilla'}
             </DialogTitle>
           </DialogHeader>
 
@@ -250,42 +250,27 @@ export function ChatInput({
                         ...prev,
                         [key]: e.target.value
                       }))}
-                      placeholder={`Enter ${key}`}
+                      placeholder={`Ingresa ${key}`}
                     />
                   </div>
                 ))}
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedTemplate(null)
-                    setVariables({})
-                  }}
-                >
-                  Back
+                <Button variant="outline" onClick={() => setSelectedTemplate(null)}>
+                  Volver
                 </Button>
-                <Button
-                  type="button"
-                  onClick={applyTemplate}
-                  disabled={Object.values(variables).some(v => !v)}
-                >
-                  Apply Template
+                <Button onClick={applyTemplate}>
+                  Usar Plantilla
                 </Button>
               </div>
             </div>
           ) : (
-            <ScrollArea className="h-[400px]">
-              <div className="grid gap-4 p-2">
-                {loadingTemplates ? (
-                  <div className="flex items-center justify-center h-32">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : templates.length === 0 ? (
+            <ScrollArea className="h-[400px] pr-4">
+              <div className="space-y-4">
+                {templates.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No templates found
+                    No se encontraron plantillas
                   </div>
                 ) : (
                   templates.map((template) => (

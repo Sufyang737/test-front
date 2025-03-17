@@ -171,64 +171,85 @@ interface BusinessProfileData {
 export const getBusinessProfile = async (clerkId: string) => {
   return withAdminAuth(async () => {
     try {
+      console.log('🔍 Buscando perfil de empresa para clerk_id:', clerkId);
+      
+      // Primero obtener el client_id usando el clerk_id
       const client = await getClientByClerkId(clerkId);
-      if (!client) return null;
+      if (!client) {
+        console.log('❌ No se encontró el cliente para clerk_id:', clerkId);
+        throw new Error('Cliente no encontrado');
+      }
 
+      console.log('✅ Cliente encontrado:', client.id);
+
+      // Buscar el perfil usando el client_id
       const records = await pb.collection('client_profile').getList(1, 1, {
         filter: `client_id = "${client.id}"`,
       });
 
-      return records.items.length > 0 ? records.items[0] : null;
+      if (records.items.length === 0) {
+        console.log('ℹ️ No se encontró perfil de empresa para el cliente');
+        return null;
+      }
+
+      console.log('✅ Perfil de empresa encontrado:', records.items[0]);
+      return records.items[0];
     } catch (error) {
-      console.error('Error getting business profile:', error);
-      return null;
+      console.error('❌ Error obteniendo perfil de empresa:', error);
+      throw new Error('Error al obtener el perfil de empresa');
     }
   });
 }
 
-export const createBusinessProfile = async (data: BusinessProfileData) => {
+export const createOrUpdateBusinessProfile = async (clerkId: string, data: Omit<BusinessProfileData, 'client_id'>) => {
   return withAdminAuth(async () => {
     try {
-      console.log('📝 Creando/actualizando perfil de empresa con datos:', JSON.stringify(data, null, 2));
-
-      const client = await getClientByClerkId(data.client_id);
+      console.log('🔄 Creando/actualizando perfil de empresa para clerk_id:', clerkId);
       
+      // Obtener el client_id usando el clerk_id
+      const client = await getClientByClerkId(clerkId);
       if (!client) {
-        throw new Error('Cliente no encontrado. Por favor, crea un perfil de cliente primero.');
+        console.error('❌ Cliente no encontrado para clerk_id:', clerkId);
+        throw new Error('Cliente no encontrado');
       }
 
-      // Verificar si ya existe un perfil para este cliente
+      // Verificar si ya existe un perfil
       const existingProfile = await pb.collection('client_profile').getList(1, 1, {
         filter: `client_id = "${client.id}"`,
       });
 
+      // Preparar los datos con el formato correcto
       const formattedData = {
         client_id: client.id,
         name_company: data.name_company,
         description: data.description,
         opening_hours: data.opening_hours,
-        instagram: data.instagram && data.instagram !== "" ? ensureHttps(data.instagram) : null,
-        facebook: data.facebook && data.facebook !== "" ? ensureHttps(data.facebook) : null,
-        website: data.website && data.website !== "" ? ensureHttps(data.website) : null,
-        x: data.x && data.x !== "" ? ensureHttps(data.x) : null,
+        instagram: data.instagram && data.instagram !== "" ? ensureHttps(data.instagram) : "",
+        facebook: data.facebook && data.facebook !== "" ? ensureHttps(data.facebook) : "",
+        website: data.website && data.website !== "" ? ensureHttps(data.website) : "",
+        x: data.x && data.x !== "" ? ensureHttps(data.x) : "",
       };
 
       let record;
       if (existingProfile.items.length > 0) {
         // Actualizar perfil existente
         console.log('🔄 Actualizando perfil existente');
-        record = await pb.collection('client_profile').update(existingProfile.items[0].id, formattedData);
+        record = await pb.collection('client_profile').update(
+          existingProfile.items[0].id, 
+          formattedData
+        );
+        console.log('✅ Perfil actualizado:', record);
       } else {
         // Crear nuevo perfil
         console.log('✨ Creando nuevo perfil');
         record = await pb.collection('client_profile').create(formattedData);
+        console.log('✅ Perfil creado:', record);
       }
 
-      console.log('✅ Perfil guardado exitosamente:', record);
       return { success: true, data: record };
-    } catch (error: any) {
-      console.error('❌ Error guardando perfil de empresa:', error);
-      throw new Error(error.message || 'Error al guardar el perfil de empresa');
+    } catch (error) {
+      console.error('❌ Error en createOrUpdateBusinessProfile:', error);
+      throw error;
     }
   });
 }

@@ -19,12 +19,12 @@ export function useBotStatus() {
       // Check content type to handle non-JSON responses
       const contentType = response.headers.get('content-type')
       if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Invalid response format: Expected JSON')
+        throw new Error('Formato de respuesta inválido: Se esperaba JSON')
       }
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Failed to get bot status')
+        throw new Error(data.error || 'Error al obtener el estado del bot')
       }
 
       const data = await response.json()
@@ -34,10 +34,10 @@ export function useBotStatus() {
           category: data.record.category
         }
       }
-      throw new Error('Invalid response format')
+      throw new Error('Formato de respuesta inválido')
     } catch (error) {
       console.error('Error getting bot status:', error)
-      setError(error instanceof Error ? error.message : 'Failed to get bot status')
+      setError(error instanceof Error ? error.message : 'Error al obtener el estado del bot')
       return null
     } finally {
       setLoading(false)
@@ -64,7 +64,7 @@ export function useBotStatus() {
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Failed to update bot status')
+        throw new Error(data.error || 'Error al actualizar el estado del bot')
       }
 
       const data = await response.json()
@@ -74,7 +74,7 @@ export function useBotStatus() {
           category: data.record.category
         }
       }
-      throw new Error('Invalid response format')
+      throw new Error('Formato de respuesta inválido')
     } catch (error) {
       console.error('Error updating bot status:', error)
       setError(error instanceof Error ? error.message : 'Failed to update bot status')
@@ -95,7 +95,7 @@ export function useBotStatus() {
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Failed to toggle bot status')
+        throw new Error(data.error || 'Error al alternar el estado del bot')
       }
 
       const data = await response.json()
@@ -105,7 +105,7 @@ export function useBotStatus() {
           category: data.record.category
         }
       }
-      throw new Error('Invalid response format')
+      throw new Error('Formato de respuesta inválido')
     } catch (error) {
       console.error('Error toggling bot status:', error)
       setError(error instanceof Error ? error.message : 'Failed to toggle bot status')

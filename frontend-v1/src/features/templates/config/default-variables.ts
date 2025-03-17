@@ -6,102 +6,102 @@ export interface TemplateVariable {
 }
 
 export const DEFAULT_VARIABLES: TemplateVariable[] = [
-  // Client Variables
+  // Variables del Cliente
   {
     name: 'client_name',
-    description: 'Full name of the client',
-    example: 'John Doe',
+    description: 'Nombre completo del cliente',
+    example: 'Juan Pérez',
     category: 'client'
   },
   {
     name: 'client_first_name',
-    description: 'First name of the client',
-    example: 'John',
+    description: 'Nombre del cliente',
+    example: 'Juan',
     category: 'client'
   },
   {
     name: 'client_phone',
-    description: 'Phone number of the client',
-    example: '+1234567890',
+    description: 'Número de teléfono del cliente',
+    example: '+34123456789',
     category: 'client'
   },
 
-  // Product Variables
+  // Variables del Producto
   {
     name: 'product_name',
-    description: 'Name of the product',
-    example: 'Premium Package',
+    description: 'Nombre del producto',
+    example: 'Paquete Premium',
     category: 'product'
   },
   {
     name: 'product_price',
-    description: 'Price of the product',
-    example: '$99.99',
+    description: 'Precio del producto',
+    example: '99,99€',
     category: 'product'
   },
   {
     name: 'product_description',
-    description: 'Description of the product',
-    example: 'Our premium service package includes...',
+    description: 'Descripción del producto',
+    example: 'Nuestro paquete de servicio premium incluye...',
     category: 'product'
   },
   {
     name: 'product_url',
-    description: 'URL to the product page',
-    example: 'https://example.com/products/premium',
+    description: 'URL de la página del producto',
+    example: 'https://ejemplo.com/productos/premium',
     category: 'product'
   },
 
-  // Support Variables
+  // Variables de Soporte
   {
     name: 'agent_name',
-    description: 'Name of the support agent',
-    example: 'Sarah Smith',
+    description: 'Nombre del agente de soporte',
+    example: 'Sara García',
     category: 'support'
   },
   {
     name: 'ticket_number',
-    description: 'Support ticket reference number',
+    description: 'Número de referencia del ticket de soporte',
     example: 'TK-12345',
     category: 'support'
   },
   {
     name: 'company_name',
-    description: 'Name of your company',
-    example: 'Acme Inc',
+    description: 'Nombre de tu empresa',
+    example: 'Empresa S.A.',
     category: 'support'
   },
   {
     name: 'support_hours',
-    description: 'Business hours for support',
-    example: '9 AM - 6 PM EST',
+    description: 'Horario de atención al cliente',
+    example: '9:00 - 18:00 CET',
     category: 'support'
   },
   {
     name: 'support_email',
-    description: 'Support email address',
-    example: 'support@example.com',
+    description: 'Correo electrónico de soporte',
+    example: 'soporte@ejemplo.com',
     category: 'support'
   }
 ]
 
 export const DEFAULT_TEMPLATES = [
   {
-    name_template: 'Welcome Message',
-    template: 'Hello {client_first_name}! Welcome to {company_name}. I\'m {agent_name}, and I\'ll be assisting you today. How can I help you?',
-    tags: 'welcome,greeting,introduction',
+    name_template: 'Mensaje de Bienvenida',
+    template: '¡Hola {client_first_name}! Bienvenido/a a {company_name}. Soy {agent_name} y estaré encantado/a de ayudarte hoy. ¿En qué puedo ayudarte?',
+    tags: 'bienvenida,saludo,introducción',
     variables: 'client_first_name,company_name,agent_name'
   },
   {
-    name_template: 'Product Information',
-    template: 'Thank you for your interest in {product_name}! The price is {product_price}. You can find more details here: {product_url}\n\n{product_description}',
-    tags: 'product,sales,information',
+    name_template: 'Información del Producto',
+    template: '¡Gracias por tu interés en {product_name}! El precio es {product_price}. Puedes encontrar más detalles aquí: {product_url}\n\n{product_description}',
+    tags: 'producto,ventas,información',
     variables: 'product_name,product_price,product_url,product_description'
   },
   {
-    name_template: 'Support Ticket Created',
-    template: 'Hi {client_name}, your support ticket #{ticket_number} has been created. Our team will review it during our business hours ({support_hours}). For urgent matters, please email us at {support_email}.',
-    tags: 'support,ticket,confirmation',
+    name_template: 'Ticket de Soporte Creado',
+    template: 'Hola {client_name}, tu ticket de soporte #{ticket_number} ha sido creado. Nuestro equipo lo revisará durante nuestro horario de atención ({support_hours}). Para asuntos urgentes, por favor envíanos un correo a {support_email}.',
+    tags: 'soporte,ticket,confirmación',
     variables: 'client_name,ticket_number,support_hours,support_email'
   }
 ] 

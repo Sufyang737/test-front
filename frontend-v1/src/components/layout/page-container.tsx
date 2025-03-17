@@ -11,7 +11,7 @@ interface PageContainerProps {
 export function PageContainer({ children, className }: PageContainerProps) {
   return (
     <div className={cn(
-      "container mx-auto max-w-7xl px-4 flex items-center justify-between w-full",
+      "w-full px-6 py-4",
       className
     )}>
       {children}

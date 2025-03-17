@@ -15,7 +15,7 @@ export function ConversationDetailsPanel({
 }: ConversationDetailsPanelProps) {
   return (
     <div className="p-4">
-      <h2 className="text-lg font-semibold mb-4">Conversation Details</h2>
+      <h2 className="text-lg font-semibold mb-4">Detalles de la Conversación</h2>
       <div className="space-y-4">
         <Button
           variant="outline"
@@ -23,7 +23,7 @@ export function ConversationDetailsPanel({
           onClick={onShowProfile}
         >
           <User className="mr-2 h-4 w-4" />
-          View Profile
+          Ver Perfil
         </Button>
         <Button
           variant="outline"
@@ -34,7 +34,7 @@ export function ConversationDetailsPanel({
           onClick={onToggleBot}
         >
           <Bot className="mr-2 h-4 w-4" />
-          {botEnabled ? 'Disable Bot' : 'Enable Bot'}
+          {botEnabled ? 'Desactivar Bot' : 'Activar Bot'}
         </Button>
       </div>
     </div>

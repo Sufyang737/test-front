@@ -10,30 +10,30 @@ type BreadcrumbItem = {
 
 // This allows to add custom title as well
 const routeMapping: Record<string, BreadcrumbItem[]> = {
-  '/dashboard': [{ title: 'Dashboard', link: '/dashboard' }],
+  '/dashboard': [{ title: 'Panel', link: '/dashboard' }],
   '/dashboard/overview': [
-    { title: 'Dashboard', link: '/dashboard' },
-    { title: 'Overview', link: '/dashboard/overview' }
+    { title: 'Panel', link: '/dashboard' },
+    { title: 'Resumen', link: '/dashboard/overview' }
   ],
   '/dashboard/chats': [
-    { title: 'Dashboard', link: '/dashboard' },
+    { title: 'Panel', link: '/dashboard' },
     { title: 'Chats', link: '/dashboard/chats' }
   ],
   '/dashboard/kanban': [
-    { title: 'Dashboard', link: '/dashboard' },
+    { title: 'Panel', link: '/dashboard' },
     { title: 'Kanban', link: '/dashboard/kanban' }
   ],
   '/dashboard/products': [
-    { title: 'Dashboard', link: '/dashboard' },
-    { title: 'Products', link: '/dashboard/products' }
+    { title: 'Panel', link: '/dashboard' },
+    { title: 'Productos', link: '/dashboard/products' }
   ],
   '/dashboard/business-profile': [
-    { title: 'Dashboard', link: '/dashboard' },
-    { title: 'Business Profile', link: '/dashboard/business-profile' }
+    { title: 'Panel', link: '/dashboard' },
+    { title: 'Perfil de Empresa', link: '/dashboard/business-profile' }
   ],
   '/dashboard/profile': [
-    { title: 'Dashboard', link: '/dashboard' },
-    { title: 'Profile', link: '/dashboard/profile' }
+    { title: 'Panel', link: '/dashboard' },
+    { title: 'Perfil', link: '/dashboard/profile' }
   ]
 };
 

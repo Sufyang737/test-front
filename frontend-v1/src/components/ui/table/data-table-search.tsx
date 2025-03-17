@@ -34,7 +34,7 @@ interface DataTableSearchProps {
 export function DataTableSearch({
   value,
   onChange,
-  placeholder = 'Search...'
+  placeholder = 'Buscar...'
 }: DataTableSearchProps) {
   return (
     <div className="flex items-center gap-2">

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/avatar'
 import { Loader2, Search } from 'lucide-react'
 import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 interface WhatsAppProfile {
   contact: {
@@ -68,7 +69,7 @@ export function ProfileSearch() {
       }
       setProfile(typedProfile)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error searching profile')
+      setError(err instanceof Error ? err.message : 'Error al buscar el perfil')
     } finally {
       setLoading(false)
     }
@@ -116,7 +117,7 @@ export function ProfileSearch() {
           </div>
 
           <div className="space-y-2">
-            <h4 className="font-medium">Recent Messages</h4>
+            <h4 className="font-medium">Mensajes Recientes</h4>
             {profile.recentMessages.length > 0 ? (
               <div className="space-y-2">
                 {profile.recentMessages.map((msg) => (
@@ -129,11 +130,11 @@ export function ProfileSearch() {
                     <p className="text-sm">{msg.content}</p>
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-xs text-muted-foreground">
-                        {format(new Date(msg.timestamp), 'MMM d, HH:mm')}
+                        {format(new Date(msg.timestamp), 'd MMM, HH:mm', { locale: es })}
                       </span>
                       {msg.sender.type === 'user' && (
                         <span className="text-xs text-muted-foreground">
-                          {msg.status}
+                          {msg.status === 'sent' ? 'Enviado' : msg.status === 'delivered' ? 'Entregado' : 'Leído'}
                         </span>
                       )}
                     </div>
@@ -141,7 +142,7 @@ export function ProfileSearch() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No recent messages</p>
+              <p className="text-sm text-muted-foreground">No hay mensajes recientes</p>
             )}
           </div>
         </Card>

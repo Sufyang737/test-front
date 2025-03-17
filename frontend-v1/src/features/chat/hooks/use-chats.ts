@@ -84,7 +84,7 @@ export function useChats(): UseChatsReturn {
       console.error('Error loading more messages:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load more messages',
+        description: 'Error al cargar más mensajes',
         variant: 'destructive'
       });
     } finally {
@@ -97,7 +97,7 @@ export function useChats(): UseChatsReturn {
     setMessages([
       {
         id: '1',
-        content: 'Hello! How can I help you today?',
+        content: '¡Hola! ¿En qué puedo ayudarte hoy?',
         type: 'assistant',
         timestamp: new Date().toISOString()
       }
@@ -117,7 +117,7 @@ export function useChats(): UseChatsReturn {
 
     const botMessage: Message = {
       id: (Date.now() + 1).toString(),
-      content: 'This is a mock response from the bot.',
+      content: 'Esta es una respuesta automática del bot.',
       type: 'assistant',
       timestamp: new Date().toISOString()
     };

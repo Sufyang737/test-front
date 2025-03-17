@@ -64,7 +64,7 @@ export function CompanyLogo() {
         </Avatar>
         <div>
           <h2 className="text-sm font-medium leading-none text-primary">{companyName}</h2>
-          <p className="text-xs text-muted-foreground">Click para configurar</p>
+          <p className="text-xs text-muted-foreground">Haz clic para configurar</p>
         </div>
       </Link>
     )
@@ -79,7 +79,7 @@ export function CompanyLogo() {
       </Avatar>
       <div>
         <h2 className="text-lg font-semibold leading-none">{companyName}</h2>
-        <p className="text-xs text-muted-foreground">Business Dashboard</p>
+        <p className="text-xs text-muted-foreground">Panel de Empresa</p>
       </div>
     </div>
   )

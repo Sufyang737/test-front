@@ -206,11 +206,11 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                   name='firstname'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>First Name</FormLabel>
+                      <FormLabel>Nombre</FormLabel>
                       <FormControl>
                         <Input
                           disabled={loading}
-                          placeholder='John'
+                          placeholder='Juan'
                           {...field}
                         />
                       </FormControl>
@@ -223,11 +223,11 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                   name='lastname'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Last Name</FormLabel>
+                      <FormLabel>Apellido</FormLabel>
                       <FormControl>
                         <Input
                           disabled={loading}
-                          placeholder='Doe'
+                          placeholder='Pérez'
                           {...field}
                         />
                       </FormControl>
@@ -240,11 +240,11 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                   name='email'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel>Correo electrónico</FormLabel>
                       <FormControl>
                         <Input
                           disabled={loading}
-                          placeholder='johndoe@gmail.com'
+                          placeholder='juan.perez@gmail.com'
                           {...field}
                         />
                       </FormControl>
@@ -257,11 +257,11 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                   name='contactno'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contact Number</FormLabel>
+                      <FormLabel>Número de contacto</FormLabel>
                       <FormControl>
                         <Input
                           type='number'
-                          placeholder='Enter you contact number'
+                          placeholder='Ingresa tu número de contacto'
                           disabled={loading}
                           {...field}
                         />
@@ -275,7 +275,7 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                   name='country'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Country</FormLabel>
+                      <FormLabel>País</FormLabel>
                       <Select
                         disabled={loading}
                         onValueChange={field.onChange}
@@ -286,12 +286,11 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                           <SelectTrigger>
                             <SelectValue
                               defaultValue={field.value}
-                              placeholder='Select a country'
+                              placeholder='Selecciona un país'
                             />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {/* @ts-ignore  */}
                           {countries.map((country) => (
                             <SelectItem key={country.id} value={country.id}>
                               {country.name}
@@ -354,7 +353,7 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                           errors?.jobs?.[index] && 'text-red-700'
                         )}
                       >
-                        {`Work Experience ${index + 1}`}
+                        {`Experiencia Laboral ${index + 1}`}
 
                         <Button
                           variant='outline'
@@ -381,7 +380,7 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                             name={`jobs.${index}.jobtitle`}
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Job title</FormLabel>
+                                <FormLabel>Puesto</FormLabel>
                                 <FormControl>
                                   <Input
                                     type='text'
@@ -398,7 +397,7 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({
                             name={`jobs.${index}.employer`}
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Employer</FormLabel>
+                                <FormLabel>Empleador</FormLabel>
                                 <FormControl>
                                   <Input
                                     type='text'

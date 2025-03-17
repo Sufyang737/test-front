@@ -144,7 +144,7 @@ export function DataTableFilterBox({
                     onSelect={resetFilter}
                     className='justify-center text-center'
                   >
-                    Clear filters
+                    Limpiar filtros
                   </CommandItem>
                 </CommandGroup>
               </>

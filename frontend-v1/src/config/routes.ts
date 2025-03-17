@@ -25,7 +25,7 @@ export const routes: RouteSection[] = [
     section: "General",
     routes: [
       {
-        label: "Dashboard",
+        label: "Panel",
         icon: LayoutDashboard,
         href: "/dashboard",
       }
@@ -40,7 +40,7 @@ export const routes: RouteSection[] = [
         href: "/dashboard/chats",
       },
       {
-        label: "Contacts",
+        label: "Contactos",
         icon: Users,
         href: "/dashboard/contacts",
       }
@@ -55,7 +55,7 @@ export const routes: RouteSection[] = [
         href: "/dashboard/products",
       },
       {
-        label: "Templates",
+        label: "Plantillas",
         icon: KanbanSquare,
         href: "/dashboard/templates",
       }

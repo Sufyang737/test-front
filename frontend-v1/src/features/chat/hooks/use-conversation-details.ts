@@ -51,7 +51,7 @@ export function useConversationDetails() {
       return details
     } catch (error) {
       console.error('Error getting conversation details:', error)
-      setError(error instanceof Error ? error.message : 'Failed to get conversation details')
+      setError(error instanceof Error ? error.message : 'Error al obtener los detalles de la conversación')
       return null
     } finally {
       setLoading(false)
@@ -91,7 +91,7 @@ export function useConversationDetails() {
       return updatedDetails
     } catch (error) {
       console.error('Error updating conversation details:', error)
-      setError(error instanceof Error ? error.message : 'Failed to update conversation details')
+      setError(error instanceof Error ? error.message : 'Error al actualizar los detalles de la conversación')
       return null
     } finally {
       setLoading(false)

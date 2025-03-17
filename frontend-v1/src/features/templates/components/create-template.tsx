@@ -109,7 +109,7 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Create New Template</DialogTitle>
+          <DialogTitle>Crear Nueva Plantilla</DialogTitle>
         </DialogHeader>
 
         {error && (
@@ -120,8 +120,8 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
 
         <Tabs defaultValue="custom" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="custom">Custom Template</TabsTrigger>
-            <TabsTrigger value="preset">Preset Templates</TabsTrigger>
+            <TabsTrigger value="custom">Plantilla Personalizada</TabsTrigger>
+            <TabsTrigger value="preset">Plantillas Predefinidas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="preset" className="space-y-4">
@@ -156,11 +156,11 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name_template">Template Name</Label>
+                    <Label htmlFor="name_template">Nombre de la Plantilla</Label>
                     <Input
                       id="name_template"
                       name="name_template"
-                      placeholder="Enter template name"
+                      placeholder="Ingresa el nombre de la plantilla"
                       value={formData.name_template}
                       onChange={handleChange}
                       required
@@ -168,11 +168,11 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="template">Template Content</Label>
+                    <Label htmlFor="template">Contenido de la Plantilla</Label>
                     <Textarea
                       id="template"
                       name="template"
-                      placeholder="Type your message here..."
+                      placeholder="Escribe tu mensaje aquí..."
                       value={formData.template}
                       onChange={handleChange}
                       required
@@ -182,15 +182,15 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
 
                   <div className="space-y-2">
                     <Label htmlFor="tags">
-                      Tags
+                      Etiquetas
                       <span className="text-sm text-muted-foreground ml-1">
-                        (Comma separated)
+                        (Separadas por comas)
                       </span>
                     </Label>
                     <Input
                       id="tags"
                       name="tags"
-                      placeholder="welcome, product, support"
+                      placeholder="bienvenida, producto, soporte"
                       value={formData.tags}
                       onChange={handleChange}
                       required
@@ -200,24 +200,24 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Variable Categories</Label>
+                    <Label>Categorías de Variables</Label>
                     <Select
                       value={selectedCategory}
                       onValueChange={(value) => setSelectedCategory(value as TemplateVariable['category'])}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
+                        <SelectValue placeholder="Selecciona una categoría" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="client">Client Variables</SelectItem>
-                        <SelectItem value="product">Product Variables</SelectItem>
-                        <SelectItem value="support">Support Variables</SelectItem>
+                        <SelectItem value="client">Variables de Cliente</SelectItem>
+                        <SelectItem value="product">Variables de Producto</SelectItem>
+                        <SelectItem value="support">Variables de Soporte</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Available Variables</Label>
+                    <Label>Variables Disponibles</Label>
                     <ScrollArea className="h-[300px] rounded-md border p-4">
                       <div className="space-y-2">
                         {DEFAULT_VARIABLES
@@ -233,7 +233,7 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
                                 {variable.description}
                               </div>
                               <div className="text-xs text-muted-foreground mt-1">
-                                Example: {variable.example}
+                                Ejemplo: {variable.example}
                               </div>
                             </div>
                           ))}
@@ -242,7 +242,7 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Used Variables</Label>
+                    <Label>Variables Utilizadas</Label>
                     <div className="flex flex-wrap gap-1 min-h-[2.5rem] p-2 rounded-md border">
                       {formData.variables.split(',').filter(Boolean).map((variable) => (
                         <Badge key={variable} variant="secondary">
@@ -256,11 +256,11 @@ export function CreateTemplate({ open, onClose, onSuccess }: CreateTemplateProps
 
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={onClose}>
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Create Template
+                  Crear Plantilla
                 </Button>
               </div>
             </form>

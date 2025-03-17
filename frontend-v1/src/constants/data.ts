@@ -14,36 +14,36 @@ export type Product = {
 //Info: The following data is used for the sidebar navigation and Cmd K bar.
 export const navItems: NavItem[] = [
   {
-    title: 'Dashboard',
+    title: 'Panel',
     url: '/dashboard/overview',
     icon: 'dashboard',
     isActive: false,
     shortcut: ['d', 'd'],
-    items: [] // Empty array as there are no child items for Dashboard
+    items: [] // No hay elementos hijos para el Panel
   },
   {
-    title: 'Products',
+    title: 'Productos',
     url: '/dashboard/products',
     icon: 'product',
     shortcut: ['p', 'p'],
     isActive: false,
-    items: [] // No child items
+    items: [] // Sin elementos hijos
   },
   {
-    title: 'Account',
-    url: '#', // Placeholder as there is no direct link for the parent
+    title: 'Cuenta',
+    url: '#', // Marcador de posición ya que no hay enlace directo para el padre
     icon: 'billing',
     isActive: true,
 
     items: [
       {
-        title: 'Profile',
+        title: 'Perfil',
         url: '/dashboard/profile',
         icon: 'userPen',
         shortcut: ['m', 'm']
       },
       {
-        title: 'Login',
+        title: 'Iniciar Sesión',
         shortcut: ['l', 'l'],
         url: '/',
         icon: 'login'
@@ -51,12 +51,12 @@ export const navItems: NavItem[] = [
     ]
   },
   {
-    title: 'Kanban',
+    title: 'Tablero',
     url: '/dashboard/kanban',
     icon: 'kanban',
     shortcut: ['k', 'k'],
     isActive: false,
-    items: [] // No child items
+    items: [] // Sin elementos hijos
   }
 ];
 

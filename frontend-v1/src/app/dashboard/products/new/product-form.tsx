@@ -24,10 +24,10 @@ import { useClientId } from '@/lib/utils/get-client-id'
 const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL)
 
 const productSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  url: z.string().url('Must be a valid URL'),
-  description: z.string().min(10, 'Description must be at least 10 characters'),
-  price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a valid price (e.g., 10.99)'),
+  name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
+  url: z.string().url('Debe ser una URL válida'),
+  description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
+  price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Debe ser un precio válido (ej. 10.99)'),
 })
 
 type ProductFormValues = z.infer<typeof productSchema>
@@ -99,12 +99,12 @@ export default function ProductForm() {
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Name</FormLabel>
+              <FormLabel>Nombre</FormLabel>
               <FormControl>
-                <Input placeholder="Product name" {...field} disabled={!isLoaded || isLoading} />
+                <Input placeholder="Nombre del producto" {...field} disabled={!isLoaded || isLoading} />
               </FormControl>
               <FormDescription>
-                The name of your product.
+                El nombre de tu producto.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -118,10 +118,10 @@ export default function ProductForm() {
             <FormItem>
               <FormLabel>URL</FormLabel>
               <FormControl>
-                <Input placeholder="https://example.com" {...field} disabled={!isLoaded || isLoading} />
+                <Input placeholder="https://ejemplo.com" {...field} disabled={!isLoaded || isLoading} />
               </FormControl>
               <FormDescription>
-                The URL where the product can be found.
+                La URL donde se puede encontrar el producto.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -133,17 +133,17 @@ export default function ProductForm() {
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Description</FormLabel>
+              <FormLabel>Descripción</FormLabel>
               <FormControl>
                 <Textarea 
-                  placeholder="Product description" 
+                  placeholder="Descripción del producto" 
                   {...field}
                   className="min-h-[100px]"
                   disabled={!isLoaded || isLoading}
                 />
               </FormControl>
               <FormDescription>
-                A detailed description of your product.
+                Una descripción detallada de tu producto.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -155,12 +155,12 @@ export default function ProductForm() {
           name="price"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Price</FormLabel>
+              <FormLabel>Precio</FormLabel>
               <FormControl>
                 <Input placeholder="10.99" {...field} disabled={!isLoaded || isLoading} />
               </FormControl>
               <FormDescription>
-                The price of your product (e.g., 10.99).
+                El precio de tu producto (ej. 10.99).
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -168,7 +168,7 @@ export default function ProductForm() {
         />
 
         <Button type="submit" disabled={!isLoaded || isLoading}>
-          {isLoading ? 'Creating...' : 'Create Product'}
+          {isLoading ? 'Creando...' : 'Crear Producto'}
         </Button>
       </form>
     </Form>

@@ -20,7 +20,7 @@ import { TimePicker } from "@/components/ui/time-picker"
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
 import { Loader2, CheckCircle2 } from "lucide-react"
-import { createBusinessProfile, getBusinessProfile } from "@/lib/pocketbase"
+import { createOrUpdateBusinessProfile, getBusinessProfile } from "@/lib/pocketbase"
 import { useAuth } from "@clerk/nextjs"
 import {
   Dialog,
@@ -31,6 +31,13 @@ import {
 } from "@/components/ui/dialog"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface BusinessHours {
   open: string
@@ -88,13 +95,18 @@ export function BusinessProfileForm({ onboardingMode = false }: BusinessProfileF
   // Cargar datos existentes
   useEffect(() => {
     async function loadExistingProfile() {
-      if (!userId) return;
+      if (!userId) {
+        console.log('No hay usuario autenticado');
+        return;
+      }
 
       try {
         setIsLoading(true);
         const profile = await getBusinessProfile(userId);
         
         if (profile) {
+          console.log('Perfil cargado:', profile);
+          
           // Parse opening hours back into state
           const hours = profile.opening_hours.split('; ').reduce((acc: DaysConfig, curr: string) => {
             const [day, time] = curr.split(': ');
@@ -111,17 +123,19 @@ export function BusinessProfileForm({ onboardingMode = false }: BusinessProfileF
 
           // Set form values
           form.reset({
-            name_company: profile.name_company,
-            description: profile.description,
-            opening_hours: profile.opening_hours,
+            name_company: profile.name_company || "",
+            description: profile.description || "",
+            opening_hours: profile.opening_hours || "",
             instagram: profile.instagram || "",
             facebook: profile.facebook || "",
             website: profile.website || "",
             x: profile.x || "",
           });
+        } else {
+          console.log('No se encontró perfil existente');
         }
       } catch (error) {
-        console.error('Error loading profile:', error);
+        console.error('Error cargando perfil:', error);
         toast({
           variant: "destructive",
           title: "Error",
@@ -133,7 +147,7 @@ export function BusinessProfileForm({ onboardingMode = false }: BusinessProfileF
     }
 
     loadExistingProfile();
-  }, [userId, form]);
+  }, [userId, form, toast]);
 
   const formatBusinessHours = () => {
     return Object.entries(businessDays)
@@ -145,16 +159,29 @@ export function BusinessProfileForm({ onboardingMode = false }: BusinessProfileF
   };
 
   const onSubmit = async (data: BusinessProfileFormValues) => {
+    if (!userId) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Debes iniciar sesión para guardar el perfil"
+      });
+      return;
+    }
+
     try {
       setIsLoading(true);
       
       // Format business hours before sending
       const formattedHours = formatBusinessHours();
       
-      const response = await createBusinessProfile({
-        ...data,
+      const response = await createOrUpdateBusinessProfile(userId, {
+        name_company: data.name_company,
+        description: data.description,
         opening_hours: formattedHours,
-        client_id: userId!,
+        instagram: data.instagram,
+        facebook: data.facebook,
+        website: data.website,
+        x: data.x,
       });
 
       if (response.success) {
@@ -169,14 +196,16 @@ export function BusinessProfileForm({ onboardingMode = false }: BusinessProfileF
           setTimeout(() => {
             router.push('/dashboard');
           }, 1500);
+        } else {
+          setShowSuccessDialog(true);
         }
       }
     } catch (error) {
-      console.error('Error creating business profile:', error);
+      console.error('Error guardando perfil:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al guardar los datos",
+        description: error instanceof Error ? error.message : "Error al guardar los datos"
       });
     } finally {
       setIsLoading(false);
