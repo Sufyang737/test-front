@@ -71,7 +71,7 @@ export function ChatMessages({
       <div className="flex flex-col-reverse p-4 space-y-reverse space-y-4">
         {/* Botón de cargar más */}
         {hasMoreMessages && (
-          <div className="flex justify-center">
+          <div ref={loadMoreRef} className="flex justify-center">
             <button
               className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
               onClick={() => loadMoreMessages()}
@@ -104,7 +104,7 @@ export function ChatMessages({
                     : "bg-muted"
                 )}>
                   <p className="whitespace-pre-wrap break-words">
-                    {message.content}
+                    {typeof message.content === 'string' ? message.content : 'Mensaje no disponible'}
                   </p>
                   {showTimestamp && (
                     <p className="text-xs mt-1 opacity-70">
@@ -116,6 +116,7 @@ export function ChatMessages({
             )
           })}
         </div>
+        <div ref={messagesEndRef} />
       </div>
     </ScrollArea>
   )

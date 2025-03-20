@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { Server } from 'socket.io'
+
+let io: Server | null = null
 
 export async function POST(request: NextRequest) {
   console.log('🎯 WEBHOOK RECIBIDO - INICIO DEL PROCESO')
@@ -50,12 +53,38 @@ export async function POST(request: NextRequest) {
       event: 'message.new',
       session,
       payload: {
-        ...payload,
+        id: payload.id,
+        from: payload.from,
+        to: payload.to,
+        body: payload.body,
+        timestamp: payload.timestamp,
+        fromMe: payload.fromMe,
+        status: payload.ack || 'sent',
         notifyName
       }
     }
+
+    // Si el servidor WebSocket no está inicializado, inicializarlo
+    if (!io) {
+      const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL
+      if (!WAHA_API_URL) {
+        throw new Error('WAHA_API_URL no está definida')
+      }
+
+      io = new Server({
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      })
+
+      io.listen(3001) // Puerto para WebSocket
+    }
+
+    // Emitir el mensaje a todos los clientes conectados
+    io.emit('message.new', wsMessage)
     
-    console.log('📤 Mensaje WebSocket preparado:', JSON.stringify(wsMessage, null, 2))
+    console.log('📤 Mensaje WebSocket enviado:', JSON.stringify(wsMessage, null, 2))
     console.log('🎯 WEBHOOK PROCESADO CORRECTAMENTE')
 
     return NextResponse.json({ status: 'OK' })

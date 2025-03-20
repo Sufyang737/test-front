@@ -1,12 +1,12 @@
 import {
   LayoutDashboard,
-  MessageSquare,
   Store,
   Settings,
   Building2,
   HelpCircle,
   Users,
-  KanbanSquare
+  KanbanSquare,
+  MessageSquare
 } from "lucide-react"
 
 interface Route {
