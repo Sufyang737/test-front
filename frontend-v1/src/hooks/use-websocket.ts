@@ -1,57 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-interface WebSocketMessage {
-  event: string;
-  session: string;
-  payload: {
-    id: string;
-    from: string;
-    to: string;
-    body: string;
-    timestamp: number;
-    fromMe: boolean;
-    status: 'sent' | 'delivered' | 'read';
-  };
+interface Message {
+  id: string;
+  from: string;
+  to: string;
+  body: string;
+  fromMe: boolean;
+  timestamp: number;
 }
 
-export function useWebSocket() {
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [connected, setConnected] = useState(false);
-
+export function useWebSocket(onNewMessage?: (message: Message) => void) {
   useEffect(() => {
-    const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL;
-    if (!WAHA_API_URL) {
-      console.error('WAHA_API_URL no está definida');
-      return;
-    }
+    const socket = io('http://localhost:3001');
 
-    const newSocket = io(WAHA_API_URL, {
-      transports: ['websocket'],
-      autoConnect: true
+    socket.on('connect', () => {
+      console.log('🔌 Conectado al WebSocket');
     });
 
-    newSocket.on('connect', () => {
-      console.log('WebSocket conectado');
-      setConnected(true);
+    socket.on('disconnect', () => {
+      console.log('🔌 Desconectado del WebSocket');
     });
 
-    newSocket.on('disconnect', () => {
-      console.log('WebSocket desconectado');
-      setConnected(false);
+    socket.on('message.new', (message: Message) => {
+      console.log('📩 Nuevo mensaje recibido por WebSocket:', message);
+      if (onNewMessage) {
+        onNewMessage(message);
+      }
     });
 
-    newSocket.on('error', (error) => {
-      console.error('Error en WebSocket:', error);
-      setConnected(false);
+    socket.on('message.ack', (data) => {
+      console.log('✅ Confirmación de mensaje:', data);
     });
 
-    setSocket(newSocket);
+    socket.on('message.reaction', (data) => {
+      console.log('😀 Reacción a mensaje:', data);
+    });
+
+    socket.on('presence.update', (data) => {
+      console.log('👤 Actualización de presencia:', data);
+    });
 
     return () => {
-      newSocket.close();
+      socket.disconnect();
     };
-  }, []);
-
-  return { socket, connected };
+  }, [onNewMessage]);
 } 

@@ -1,94 +1,93 @@
 import { NextResponse } from 'next/server';
-import PocketBase from 'pocketbase';
 import { headers } from 'next/headers';
+import PocketBase from 'pocketbase';
 
 const WAHA_API_URL = process.env.NEXT_PUBLIC_WAHA_API_URL;
 const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'https://ai-agent-database.srv.clostech.tech';
 const POCKETBASE_ADMIN_TOKEN = process.env.NEXT_PUBLIC_POCKETBASE_ADMIN_TOKEN;
+const MESSAGES_PER_PAGE = 20;
 
-export async function GET(request: Request, { params }: { params: { chatId: string } }) {
+export async function GET(
+  request: Request,
+  { params }: { params: { chatId: string } }
+) {
   console.log('🔍 Iniciando obtención de mensajes...');
-  console.log('📡 URL de WAHA:', WAHA_API_URL);
-  console.log('📡 URL de PocketBase:', POCKETBASE_URL);
   
   try {
     if (!POCKETBASE_ADMIN_TOKEN) {
-      console.error('❌ POCKETBASE_ADMIN_TOKEN no está definido');
       throw new Error('POCKETBASE_ADMIN_TOKEN no está definido');
     }
 
     // Obtener el clerk_id del header
     const headersList = await headers();
     const clerk_id = await headersList.get('x-clerk-user-id');
-    console.log('👤 Clerk ID del usuario:', clerk_id);
-
+    
     if (!clerk_id) {
-      console.error('❌ No se encontró el clerk_id en los headers');
       throw new Error('No se encontró el clerk_id en los headers');
     }
 
-    // 1. Obtener el cliente desde PocketBase usando el clerk_id
-    console.log('🔄 Conectando a PocketBase...');
+    // Obtener el número de página de la URL
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    console.log('📄 Página solicitada:', page);
+
+    // Conectar a PocketBase
     const pb = new PocketBase(POCKETBASE_URL);
-    
-    // Autenticar con el token de admin
     pb.authStore.save(POCKETBASE_ADMIN_TOKEN);
-    console.log('🔐 Autenticado con token de admin');
     
     try {
+      // Obtener el cliente
       const client = await pb.collection('clients').getFirstListItem(`clerk_id = "${clerk_id}"`, {
         fields: 'id,session_id'
       });
 
-      console.log('📦 Cliente encontrado:', client);
-
       if (!client?.session_id) {
-        console.error('❌ El cliente no tiene session_id');
         throw new Error('El cliente no tiene session_id configurado');
       }
 
-      const { chatId } = params;
-      console.log('💬 Chat ID:', chatId);
-
-      // 2. Hacer la petición a WAHA con el session_id y chatId correctos
-      const url = `${WAHA_API_URL}/api/${client.session_id}/chats/${chatId}/messages`;
-      console.log('📡 Haciendo petición a WAHA:', url);
+      // Obtener mensajes de WAHA usando el endpoint correcto
+      const wahaUrl = new URL(`${WAHA_API_URL}/api/messages`);
+      wahaUrl.searchParams.append('chatId', params.chatId);
+      wahaUrl.searchParams.append('session', client.session_id);
+      wahaUrl.searchParams.append('limit', MESSAGES_PER_PAGE.toString());
+      wahaUrl.searchParams.append('page', page.toString());
       
-      const response = await fetch(url);
-      console.log('📥 Estado de la respuesta de WAHA:', response.status, response.statusText);
+      console.log('📡 Haciendo petición a WAHA:', wahaUrl.toString());
+      
+      const response = await fetch(wahaUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       
       if (!response.ok) {
-        console.error('❌ Error en la respuesta de WAHA:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('❌ Error detallado:', errorText);
         throw new Error(`Error al obtener mensajes: ${response.statusText}`);
       }
 
-      const rawData = await response.json();
-      console.log('📦 Datos crudos recibidos de WAHA:', JSON.stringify(rawData, null, 2));
-
-      // Verificar si rawData es un array
-      if (!Array.isArray(rawData)) {
-        console.error('❌ Los datos recibidos no son un array:', typeof rawData);
-        console.error('Datos recibidos:', rawData);
-        return NextResponse.json({ error: 'Formato de datos inválido' }, { status: 500 });
-      }
+      const data = await response.json();
+      console.log('📦 Respuesta de WAHA:', data);
       
-      // Transformar los datos al formato que espera nuestro frontend
-      const messages = rawData.map((message: any) => ({
-        id: message.id,
-        body: message.body,
-        fromMe: message.fromMe,
-        timestamp: message.timestamp
+      // Transformar mensajes al formato necesario
+      const messages = (Array.isArray(data) ? data : data.messages || []).map((msg: any) => ({
+        id: msg.id,
+        body: msg.body || msg.text || '',
+        timestamp: msg.timestamp || Date.now(),
+        fromMe: msg.fromMe || false
       }));
 
-      console.log('✅ Mensajes procesados:', messages.length);
-      return NextResponse.json(messages);
+      return NextResponse.json({
+        messages,
+        hasMore: data.hasMore || false,
+        total: data.total || messages.length
+      });
     } finally {
-      // Limpiar la autenticación después de usarla
       pb.authStore.clear();
     }
   } catch (error) {
-    console.error('❌ Error en /api/messages/[chatId]:', error);
-    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
+    console.error('❌ Error al obtener mensajes:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Error al obtener mensajes' },
       { status: 500 }
