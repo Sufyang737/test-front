@@ -14,9 +14,14 @@ import { useWebSocket } from '@/hooks/use-websocket';
 interface Contact {
   id: string;
   name: string;
-  phone: string;
-  lastMessage?: string;
-  timestamp?: string;
+  picture?: string | null;
+  lastMessage?: {
+    body: string;
+    timestamp: number;
+    fromMe: boolean;
+    hasMedia: boolean;
+    from: string;
+  } | null;
 }
 
 interface Message {
@@ -28,6 +33,9 @@ interface Message {
   to?: string;
 }
 
+const POLLING_INTERVAL = 5000; // Aumentado a 5 segundos
+const MESSAGE_LIMIT = 50; // Límite de mensajes a cargar
+
 export default function ChatsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -35,66 +43,63 @@ export default function ChatsPage() {
   const [messageInput, setMessageInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { userId } = useAuth();
+
+  // Referencia para controlar el polling
+  const pollingRef = useRef<{
+    chats: NodeJS.Timeout | null;
+    messages: NodeJS.Timeout | null;
+  }>({
+    chats: null,
+    messages: null,
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
-    if (userId) {
-      loadContacts();
+  // Detener el polling
+  const stopPolling = useCallback((type?: 'chats' | 'messages') => {
+    if (!type || type === 'chats') {
+      if (pollingRef.current.chats) {
+        clearInterval(pollingRef.current.chats);
+        pollingRef.current.chats = null;
+      }
     }
-  }, [userId]);
-
-  useEffect(() => {
-    if (selectedContact) {
-      loadMessages(selectedContact.id);
+    if (!type || type === 'messages') {
+      if (pollingRef.current.messages) {
+        clearInterval(pollingRef.current.messages);
+        pollingRef.current.messages = null;
+      }
     }
-  }, [selectedContact]);
+  }, []);
 
   const loadContacts = async () => {
-    if (!userId) {
-      console.error('❌ No hay userId disponible');
-      return;
-    }
-
     setIsLoading(true);
     try {
-      console.log('🔄 Iniciando carga de contactos...');
-      const response = await fetch('/api/contacts', {
-        headers: {
-          'x-clerk-user-id': userId
-        }
-      });
-      console.log('📥 Estado de la respuesta:', response.status);
+      console.log('🔄 Cargando chats...');
+      const response = await fetch('/api/chats/overview');
       
       if (!response.ok) {
-        throw new Error(`Error al cargar contactos: ${response.statusText}`);
+        throw new Error(`Error al cargar chats: ${response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('📦 Datos recibidos:', data);
+      console.log('📦 Chats recibidos:', data);
       
-      if (Array.isArray(data)) {
-        setContacts(data);
+      if (data.status === 'ok' && Array.isArray(data.chats)) {
+        setContacts(data.chats);
       } else {
-        console.error('❌ Los datos recibidos no son un array:', data);
+        console.error('❌ Formato de respuesta inválido:', data);
         throw new Error('Formato de datos inválido');
       }
     } catch (error) {
-      console.error('❌ Error al cargar contactos:', error);
+      console.error('❌ Error al cargar chats:', error);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Error al cargar contactos',
+        description: error instanceof Error ? error.message : 'Error al cargar chats',
         variant: 'destructive',
       });
       setContacts([]);
@@ -103,49 +108,68 @@ export default function ChatsPage() {
     }
   };
 
-  const loadMessages = async (contactId: string, pageNum = 1, append = false) => {
-    if (!userId) {
-      console.error('❌ No hay userId disponible');
-      return;
-    }
-
-    setIsLoadingMessages(true);
-    try {
-      console.log('🔄 Cargando mensajes para:', contactId, 'página:', pageNum);
-      const response = await fetch(`/api/messages/${contactId}?page=${pageNum}`, {
-        headers: {
-          'x-clerk-user-id': userId
+  // Función para iniciar el polling de chats
+  const startChatsPolling = useCallback(() => {
+    if (pollingRef.current.chats) return;
+    
+    const pollChats = async () => {
+      try {
+        const lastUpdate = localStorage.getItem('lastChatsUpdate') || '0';
+        const response = await fetch(`/api/chats/overview?since=${lastUpdate}`);
+        if (!response.ok) throw new Error(`Error al cargar chats: ${response.statusText}`);
+        
+        const data = await response.json();
+        if (data.status === 'ok' && Array.isArray(data.chats)) {
+          setContacts(prevContacts => {
+            // Actualizar solo si hay cambios y mantener un máximo de chats
+            const updatedChats = [...prevContacts];
+            data.chats.forEach(newChat => {
+              const index = updatedChats.findIndex(c => c.id === newChat.id);
+              if (index !== -1) {
+                updatedChats[index] = newChat;
+              } else {
+                updatedChats.unshift(newChat);
+              }
+            });
+            localStorage.setItem('lastChatsUpdate', Date.now().toString());
+            return updatedChats.slice(0, 50); // Limitar a 50 chats
+          });
         }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error al cargar mensajes: ${response.statusText}`);
+      } catch (error) {
+        console.error('❌ Error en polling de chats:', error);
       }
+    };
+
+    pollChats(); // Primera ejecución
+    pollingRef.current.chats = setInterval(pollChats, POLLING_INTERVAL);
+  }, []);
+
+  const loadMessages = async (contactId: string) => {
+    try {
+      setIsLoadingMessages(true);
+      console.log('🔄 Cargando mensajes para:', contactId);
       
+      const response = await fetch(`/api/messages/${contactId}`);
       const data = await response.json();
-      console.log('📦 Mensajes recibidos:', data);
       
-      if (Array.isArray(data.messages)) {
-        // Ordenar mensajes por timestamp (más recientes abajo)
-        const sortedMessages = data.messages.sort((a, b) => a.timestamp - b.timestamp);
-        
-        if (append) {
-          setMessages(prev => [...sortedMessages, ...prev]);
-        } else {
-          setMessages(sortedMessages);
-        }
-        
-        setHasMore(data.hasMore || false);
+      console.log('📥 Respuesta de mensajes:', data);
+      
+      if (data.status === 'ok' && Array.isArray(data.messages)) {
+        setMessages(data.messages);
+        scrollToBottom();
       } else {
-        console.error('❌ Los datos recibidos no son un array:', data);
-        setMessages([]);
-        throw new Error('Formato de datos inválido');
+        console.error('❌ Formato de respuesta inválido:', data);
+        toast({
+          title: "Error",
+          description: "Formato de respuesta inválido",
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      console.error('❌ Error al cargar mensajes:', error);
+      console.error('❌ Error cargando mensajes:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "No se pudieron cargar los mensajes",
+        description: "No se pudieron cargar los mensajes",
         variant: "destructive"
       });
       setMessages([]);
@@ -154,18 +178,91 @@ export default function ChatsPage() {
     }
   };
 
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLDivElement;
-    if (target.scrollTop === 0 && hasMore && !isLoadingMessages) {
-      setPage(prev => {
-        const newPage = prev + 1;
-        if (selectedContact) {
-          loadMessages(selectedContact.id, newPage, true);
+  // Función para iniciar el polling de mensajes
+  const startMessagesPolling = useCallback((contactId: string) => {
+    if (pollingRef.current.messages) return;
+    
+    const pollMessages = async () => {
+      try {
+        const lastMessageId = messages[messages.length - 1]?.id;
+        const url = new URL(`/api/messages/${contactId}`, window.location.origin);
+        if (lastMessageId) {
+          url.searchParams.append('after', lastMessageId);
         }
-        return newPage;
+        url.searchParams.append('limit', MESSAGE_LIMIT.toString());
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Error al cargar mensajes');
+        
+        const data = await response.json();
+        if (data.status === 'ok' && Array.isArray(data.messages)) {
+          setMessages(prevMessages => {
+            // Solo agregar mensajes nuevos que no existan
+            const currentIds = new Set(prevMessages.map(m => m.id));
+            const newMessages = data.messages.filter(msg => !currentIds.has(msg.id));
+            
+            if (newMessages.length > 0) {
+              console.log(`🔄 ${newMessages.length} nuevos mensajes detectados`);
+              const updatedMessages = [...prevMessages, ...newMessages];
+              // Mantener solo los últimos MESSAGE_LIMIT mensajes
+              const limitedMessages = updatedMessages.slice(-MESSAGE_LIMIT);
+              return limitedMessages;
+            }
+            return prevMessages;
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error en polling de mensajes:', error);
+      }
+    };
+
+    pollMessages(); // Primera ejecución
+    pollingRef.current.messages = setInterval(pollMessages, POLLING_INTERVAL);
+  }, []);
+
+  // Efectos
+  useEffect(() => {
+    if (userId) {
+      loadContacts().then(() => {
+        startChatsPolling();
       });
     }
-  }, [hasMore, isLoadingMessages, selectedContact]);
+    return () => stopPolling();
+  }, [userId, startChatsPolling, stopPolling]);
+
+  useEffect(() => {
+    if (selectedContact) {
+      // Detener polling anterior si existe
+      stopPolling('messages');
+      
+      // Cargar mensajes iniciales y comenzar polling
+      loadMessages(selectedContact.id).then(() => {
+        startMessagesPolling(selectedContact.id);
+      });
+    } else {
+      stopPolling('messages');
+      setMessages([]);
+    }
+    
+    // Cleanup al desmontar
+    return () => stopPolling('messages');
+  }, [selectedContact, startMessagesPolling, stopPolling]);
+
+  // Mover scrollToBottom a un efecto separado con debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLDivElement;
+    const isAtBottom = target.scrollHeight - target.scrollTop === target.clientHeight;
+    if (isAtBottom) {
+      scrollToBottom();
+    }
+  }, []);
 
   const sendMessage = async () => {
     if (!messageInput.trim() || !selectedContact || !userId) return;
@@ -184,41 +281,80 @@ export default function ChatsPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al enviar el mensaje');
+        throw new Error('Error al enviar el mensaje');
       }
 
-      const data = await response.json();
-      setMessages(prev => [...prev, {
-        id: data.key.id,
-        body: messageInput,
-        timestamp: Date.now(),
-        fromMe: true
-      }]);
-      
+      await loadMessages(selectedContact.id);
       setMessageInput('');
     } catch (error) {
       console.error('❌ Error al enviar mensaje:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "No se pudo enviar el mensaje",
+        description: "No se pudo enviar el mensaje",
         variant: "destructive"
       });
     }
   };
 
-  // Manejar nuevos mensajes desde WebSocket
+  // Optimizar la función de actualización de contactos
+  const updateContactWithLastMessage = useCallback((contactId: string, lastMessage: string, timestamp: number, fromMe: boolean = false) => {
+    setContacts(prevContacts => {
+      const contactIndex = prevContacts.findIndex(c => c.id === contactId);
+      if (contactIndex === -1) return prevContacts;
+
+      const updatedContacts = [...prevContacts];
+      const updatedContact = {
+        ...updatedContacts[contactIndex],
+        lastMessage: {
+          body: lastMessage,
+          timestamp: timestamp,
+          fromMe: fromMe,
+          hasMedia: false,
+          from: fromMe ? userId : contactId
+        }
+      };
+
+      // Remover y añadir al principio
+      updatedContacts.splice(contactIndex, 1);
+      updatedContacts.unshift(updatedContact);
+      
+      return updatedContacts;
+    });
+  }, [userId]);
+
+  // Manejar mensajes nuevos desde WebSocket
   const handleNewMessage = useCallback((message: Message) => {
-    if (selectedContact && 
-        (message.from === selectedContact.id || message.to === selectedContact.id)) {
-      setMessages(prev => [...prev, {
-        id: message.id,
-        body: message.body,
-        timestamp: message.timestamp,
-        fromMe: message.fromMe
-      }]);
+    console.log('📩 Nuevo mensaje recibido:', message);
+    
+    // Determinar el ID del contacto basado en si el mensaje es enviado o recibido
+    const contactId = message.fromMe ? message.to : message.from;
+    
+    // Actualizar la lista de contactos con el último mensaje
+    if (contactId) {
+      updateContactWithLastMessage(
+        contactId,
+        message.body,
+        message.timestamp,
+        message.fromMe
+      );
+
+      // Actualizar mensajes si es el chat actual
+      if (selectedContact && (
+        (message.fromMe && message.to === selectedContact.id) || 
+        (!message.fromMe && message.from === selectedContact.id)
+      )) {
+        setMessages(prevMessages => {
+          // Verificar si el mensaje ya existe
+          const messageExists = prevMessages.some(m => m.id === message.id);
+          if (messageExists) {
+            return prevMessages;
+          }
+          return [...prevMessages, message];
+        });
+        scrollToBottom();
+      }
     }
-  }, [selectedContact]);
+  }, [selectedContact, updateContactWithLastMessage]);
 
   // Usar el hook de WebSocket
   useWebSocket(handleNewMessage);
@@ -228,7 +364,7 @@ export default function ChatsPage() {
       {/* Lista de contactos */}
       <div className="w-1/3 border-r">
         <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold">Contactos</h2>
+          <h2 className="text-lg font-semibold">Chats</h2>
         </div>
         <ScrollArea className="h-[calc(100vh-5rem)]">
           {isLoading ? (
@@ -249,18 +385,26 @@ export default function ChatsPage() {
                 onClick={() => setSelectedContact(contact)}
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                    <span className="text-lg">{contact.name[0]}</span>
-                  </div>
+                  {contact.picture ? (
+                    <img 
+                      src={contact.picture} 
+                      alt={contact.name}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                      <span className="text-lg">{contact.name[0]}</span>
+                    </div>
+                  )}
                   <div className="flex-1">
-                    <h3 className="font-medium">
-                      {contact.name !== contact.id ? contact.name : contact.phone}
-                    </h3>
-                    <p className="text-sm text-gray-500">{contact.lastMessage || 'No hay mensajes'}</p>
-                    {contact.timestamp && (
-                      <p className="text-xs text-gray-400">
-                        {new Date(contact.timestamp).toLocaleString()}
-                      </p>
+                    <h3 className="font-medium">{contact.name}</h3>
+                    {contact.lastMessage && (
+                      <>
+                        <p className="text-sm text-gray-500">{contact.lastMessage.body}</p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(contact.lastMessage.timestamp).toLocaleString()}
+                        </p>
+                      </>
                     )}
                   </div>
                 </div>
@@ -268,7 +412,7 @@ export default function ChatsPage() {
             ))
           ) : (
             <div className="p-4 text-center text-gray-500">
-              No hay contactos disponibles
+              No hay chats disponibles
             </div>
           )}
         </ScrollArea>
@@ -289,8 +433,11 @@ export default function ChatsPage() {
                 <p className="text-sm text-gray-500">{selectedContact.phone}</p>
               </div>
             </div>
-            <ScrollArea className="flex-1" onScroll={handleScroll}>
-              {isLoadingMessages && hasMore && (
+            <ScrollArea 
+              className="flex-1" 
+              onScroll={handleScroll}
+            >
+              {isLoadingMessages && (
                 <div className="flex justify-center p-4">
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </div>

@@ -1362,3 +1362,152 @@ Add these variables to your `.env.local`:
 NEXT_PUBLIC_POCKETBASE_URL=your_pocketbase_url
 NEXT_PUBLIC_POCKETBASE_ADMIN_TOKEN=your_admin_token
 ```
+
+# WhatsApp Web Client
+
+Este proyecto es un cliente web para WhatsApp que utiliza la API de WAHA para la comunicación con WhatsApp Web.
+
+## 🚀 Características
+
+- Interfaz de usuario moderna y responsive
+- Chat en tiempo real con WebSocket y sistema de polling
+- Gestión de contactos y conversaciones
+- Soporte para mensajes de texto
+- Sistema de notificaciones
+- Optimización de rendimiento para múltiples chats
+
+## 📋 Requisitos Previos
+
+- Node.js (v14 o superior)
+- WAHA API Server corriendo
+- Cuenta de WhatsApp Web activa
+
+## 🛠️ Instalación
+
+1. Clona el repositorio:
+```bash
+git clone <url-del-repositorio>
+cd frontend-v1
+```
+
+2. Instala las dependencias:
+```bash
+npm install
+```
+
+3. Configura las variables de entorno:
+```bash
+cp .env.example .env.local
+```
+
+## ⚙️ Configuración
+
+### Variables de Entorno
+
+```env
+NEXT_PUBLIC_WAHA_API_URL=http://localhost:8080
+NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
+```
+
+### Configuración del Webhook en WAHA
+
+1. Accede al dashboard de WAHA
+2. En la sección de Webhooks, configura:
+   - URL: `https://tu-dominio/api/webhook`
+   - Eventos: 
+     - `session.status`
+     - `message`
+     - `message.any`
+     - `message.reaction`
+   - Reintentos: 15
+   - Delay entre reintentos: 2 segundos
+
+## 🚦 Uso
+
+### Desarrollo
+
+```bash
+npm run dev
+```
+
+### Producción
+
+```bash
+npm run build
+npm start
+```
+
+## 🏗️ Arquitectura
+
+### Componentes Principales
+
+- `ChatsPage`: Componente principal que maneja la interfaz de chat
+- `useWebSocket`: Hook personalizado para la gestión de WebSocket
+- `api/webhook`: Endpoint para recibir eventos de WAHA
+
+### Sistema de Polling
+
+El sistema implementa un polling optimizado para mantener los chats actualizados:
+
+- Polling de chats cada 5 segundos
+- Polling de mensajes con sistema de cursor
+- Límite de 50 mensajes por chat
+- Sistema de caché local para optimizar requests
+
+### Optimizaciones de Rendimiento
+
+1. **Gestión de Estado**:
+   - Actualización incremental de mensajes
+   - Caché local de últimas actualizaciones
+   - Prevención de actualizaciones duplicadas
+
+2. **Manejo de Memoria**:
+   - Límite de 50 chats en memoria
+   - Límite de 50 mensajes por chat
+   - Limpieza automática de mensajes antiguos
+
+3. **Prevención de Loops**:
+   - Debounce en scroll automático
+   - Optimización de dependencias en efectos
+   - Control de intervalos de polling
+
+## 🔧 Solución de Problemas
+
+### Errores Comunes
+
+1. **Error de Conexión WebSocket**:
+   - Verificar que el servidor WebSocket esté corriendo
+   - Comprobar la URL en las variables de entorno
+
+2. **Mensajes No Aparecen**:
+   - Verificar la configuración del webhook
+   - Comprobar los logs del servidor
+   - Verificar la conexión con WAHA
+
+3. **Maximum Update Depth Exceeded**:
+   - Este error está resuelto mediante la optimización de efectos
+   - Si persiste, verificar que no haya actualizaciones circulares en componentes personalizados
+
+## 📦 Dependencias Principales
+
+```json
+{
+  "next": "^13.0.0",
+  "react": "^18.0.0",
+  "socket.io-client": "^4.0.0",
+  "@clerk/nextjs": "latest",
+  "lucide-react": "latest"
+}
+```
+
+## 🤝 Contribución
+
+1. Fork el proyecto
+2. Crea tu rama de características (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE.md](LICENSE.md) para más detalles.
